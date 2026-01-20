@@ -1,0 +1,25 @@
+services:
+  agent:
+    build: .
+    container_name: convfinqa-agent
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data:ro
+      - ./src:/app/src:ro
+    stdin_open: true
+    tty: true
+
+  # Development service with hot reload
+  dev:
+    build: .
+    container_name: convfinqa-dev
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./tests:/app/tests
+    command: [ "bash" ]
+    stdin_open: true
+    tty: true

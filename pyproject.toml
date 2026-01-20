@@ -1,80 +1,52 @@
-[project]
-name = "hiring-confinqa"
+[tool.poetry]
+name = "convfinqa-agent"
 version = "0.1.0"
-description = "ConfinQA assignment data processing and assessment"
+description = "LLM-driven conversational QA agent for financial documents using ConvFinQA dataset"
+authors = ["Sophie Chong"]
 readme = "README.md"
-requires-python = ">=3.9"
-dependencies = [
-  "typer==0.12.0",
-  "click==8.1.7",
-  "dotenv>=0.9.9",
-  "pandas>=2.2.3",
-  "pydantic>=2.11.4",
-  "ruff>=0.11.10",
-  "mypy>=1.15.0",
-  "pylit>=0.8.0",
-]
+packages = [{include = "src"}]
 
+[tool.poetry.dependencies]
+python = "^3.12"
+langgraph = "^0.2"
+langchain-google-genai = "^2.0"
+pydantic = "^2.0"
+pydantic-settings = "^2.0"
+typer = "^0.9.0"
+click = ">=8.0.0,<8.1.0"
+rich = "^13.0"
+python-dotenv = "^1.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+pytest-cov = "^4.0"
+pytest-asyncio = "^0.23"
+ruff = "^0.4"
+mypy = "^1.10"
+
+[tool.poetry.scripts]
+convfinqa = "src.cli.main:app"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src"]
-
-[project.scripts]
-main = "src.main:app"
-
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 fix = true
-unsafe-fixes = false
+line-length = 100
 
 [tool.ruff.lint]
-select = [
-    "F",  # default Ruff rules
-    "E",  # pycodestyle Errors
-    "W",  # pycodestyle Warnings
-    "I",  # import sorting
-    "UP", # modern syntax updates
-    "B",  # flake8 common pitfalls & best practices
-    "Q",  # flake8 consistent quotes
-    "N",  # naming conventions,
-]
-
-ignore = [
-    "B008",
-    "D413",
-    "E501",
-    "W293",
-    "W291",
-    "PLR2004",
-    "D101",
-    "D400",
-
-]
-
-fixable = ["ALL"]
-
-extend-select = [
-    "PLR2004",
-    "D101",
-    "D102",
-    "D103",
-    "D201",
-    "D202",
-    "D215",
-    "T201",
-]
+select = ["F", "E", "W", "I", "UP", "B", "Q", "N"]
+ignore = ["E501"]
 
 [tool.mypy]
-disallow_any_generics = true
-disallow_untyped_defs = true
-disallow_untyped_globals = true
-ignore_missing_imports = true
-show_error_codes = true
+python_version = "3.12"
 strict = false
 warn_return_any = true
-plugins = ['pydantic.mypy']
-packages = ["src"]
+disallow_untyped_defs = true
+ignore_missing_imports = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

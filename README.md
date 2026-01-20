@@ -1,65 +1,59 @@
-# ConvFinQA Assignment
+# ConvFinQA Agent
 
+LLM-driven conversational QA agent for financial documents using the ConvFinQA dataset.
 
-Thank you for taking the time to do this assignment! Please see the [main Notion page](https://tomoroai.notion.site/Technical-Assignment-1fa0de3387ea80debb36cda4ae41e93d) for the full instructions. 
+## Setup
 
-
-We have cleaned up the dataset; please see `dataset.md` for more information. We recommend you use this version of the data for the assignment, as it will save you a lot of time. If you have any questions, please don't hesitate to ask your point of contact. 
-
-
-Good luck! 
-
-## Get started
 ### Prerequisites
 - Python 3.12+
-- [UV environment manager](https://docs.astral.sh/uv/getting-started/installation/)
+- [Poetry](https://python-poetry.org/docs/#installation)
+- Docker (optional)
 
-### Setup
-1. Clone this repository
-2. Use the UV environment manager to install dependencies:
+### Local Development
 
 ```bash
-# install uv
-brew install uv
+# Install dependencies
+poetry install
 
-# set up env
-uv sync
+# Copy environment file and add your API key
+cp .env.example .env
 
-# add python package to env
-uv add <package_name>
+# Run the CLI
+poetry run convfinqa --help
 ```
 
-### [optional] Use CLI to chat
+### Docker
 
-We have created a boilerplate cli app using [typer](https://typer.tiangolo.com/) (sister of fastapi, built on click) so there is a simple chat interface, which you can extend to meet your needs if you so choose.  By default the chat responds with a standard message as shown below.
-
-
-We've installed the app as a script, so you can run it with:
-```bash 
-uv run main
-```
-or you can use the longer form:
 ```bash
-uv run python src/main.py
+# Build and run
+docker-compose up --build agent
+
+# Development shell
+docker-compose run --rm dev
 ```
 
-How to *chat*:
+## Project Structure
+
+```
+├── src/
+│   ├── agents/       # LangGraph agent definitions
+│   ├── tools/        # Agent tools (calculator, lookups)
+│   ├── core/         # LLM client, schemas, config
+│   ├── evaluation/   # Metrics & evaluation
+│   └── cli/          # Typer CLI
+├── data/             # ConvFinQA dataset
+└── tests/
+```
+
+## Usage
+
 ```bash
-uv run main chat <record_id> 
+# Chat with a specific record
+poetry run convfinqa chat <record_id>
+
+# Evaluate on dev set
+poetry run convfinqa evaluate --split dev
+
+# Run tests
+poetry run pytest
 ```
-[![Chat](figures/chat_example.png)](figures/chat.png)  
-
-## Submission 
-Please make a submission branch & make a PR to main. The PR should contain: 
-
-
-- A solution to the main task
-- A report summarising your findings. We have sketched out a template for you in `REPORT.md`, but you can use any other setup (like LaTeX) if you prefer.
-- Please send a link to the PR to [recruitment@tomoro.ai](mailto:recruitment@tomoro.ai) with the subject `submission: <your name>`.
-  
-NOTE: Please DO NOT merge any of your submission to main, all of your work should be on your branch `submission`. 
-
-
-**Please let us know if you used any AI tools to help generate code for your assignment.**
-Using AI-powered IDEs or coding assistants is acceptable, as these are commonly used in real-world environments, and this assignment is intended to reflect that. If you’ve used AI tools to help you write code or your report, or any other part of your process, we ask that you disclose how and where you used them. This isn’t to catch you out. It’s an opportunity to show that you understand how to use these tools effectively and responsibly as part of your workflow.
-
