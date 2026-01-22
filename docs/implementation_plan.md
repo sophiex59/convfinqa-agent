@@ -159,26 +159,15 @@ graph LR
 ### ✅ Conversation mode: Multi-turn
 Support interactive multi-turn conversations, maintaining context across question turns.
 
-### ✅ Error handling: Show reasoning trace + Self-correction strategy
+### ✅ Error handling: Show reasoning trace + Log for analysis
 
-**Show reasoning trace**: Display the agent's step-by-step thinking for debugging.
+**Approach**: Display step-by-step reasoning for debugging. When errors occur, log them for offline analysis to improve prompting/agent design.
 
-**Self-correction approach**:
-```mermaid
-graph LR
-    A[Agent Response] --> B{Validate Answer}
-    B -->|Valid| C[Return Answer]
-    B -->|Invalid| D[Reflection Node]
-    D --> E[Identify Error]
-    E --> F[Retry with Feedback]
-    F --> B
+```
+Agent Response → Validate → Log result (success/failure with trace) → Return
 ```
 
-When the model produces an invalid calculation:
-1. **Detect**: Check if numeric answer can be executed/validated
-2. **Reflect**: Ask LLM "Your calculation gave X, but expected format is Y. What went wrong?"
-3. **Retry**: Re-run with error context (max 2 retries to avoid loops)
-4. **Log**: Record failure for analysis if still wrong
+No automatic retry/self-correction in initial implementation — we'll analyze errors externally rather than adding complexity. Can add self-correction later if patterns emerge.
 
 ### ✅ Report format: Markdown
 Use `REPORT.md` for the final write-up.
