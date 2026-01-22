@@ -120,3 +120,39 @@ def update_history_node(state: ConversationState) -> dict:
         "answers_history": new_history,
         "turn_index": state.turn_index + 1,
     }
+
+
+async def async_reasoning_node(state: ConversationState) -> dict:
+    """Async version of reasoning node for parallel evaluation."""
+    llm = get_llm()
+
+    document_context = format_document_context(state)
+    conversation_history = format_conversation_history(state)
+
+    prompt = REASONING_PROMPT.format(
+        document_context=document_context,
+        conversation_history=conversation_history,
+        question=state.current_question,
+    )
+
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
+    response_text = response.content
+
+    # Parse response into reasoning and answer
+    reasoning = ""
+    answer = response_text
+
+    if "REASONING:" in response_text and "ANSWER:" in response_text:
+        parts = response_text.split("ANSWER:")
+        reasoning = parts[0].replace("REASONING:", "").strip()
+        answer = parts[1].strip()
+
+    return {
+        "reasoning_trace": reasoning,
+        "current_answer": answer,
+        "messages": [
+            HumanMessage(content=state.current_question),
+            AIMessage(content=answer),
+        ],
+    }
+

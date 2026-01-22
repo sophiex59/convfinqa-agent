@@ -261,5 +261,76 @@ def analyze_answers(
     rprint(f"  Text: {text_count} ({100*text_count/total:.1f}%)")
 
 
+@app.command(name="evaluate-async")
+def evaluate_async(
+    split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
+    limit: int = typer.Option(10, help="Limit number of records to evaluate"),
+    concurrency: int = typer.Option(5, help="Number of concurrent records to process"),
+) -> None:
+    """Evaluate agent performance with async parallel processing."""
+    import asyncio
+    from src.agents.nodes import async_reasoning_node
+    
+    async def process_record(record, rec_idx: int, semaphore):
+        """Process a single record with all its questions."""
+        async with semaphore:
+            results = []
+            state = ConversationState(
+                record_id=record.id,
+                pre_text=record.doc.pre_text,
+                post_text=record.doc.post_text,
+                table=record.doc.table,
+            )
+            
+            for i, question in enumerate(record.dialogue.conv_questions):
+                state.current_question = question
+                result = await async_reasoning_node(state)
+                state = ConversationState(**{**state.model_dump(), **result})
+                
+                gold = str(record.dialogue.executed_answers[i])
+                predicted = state.current_answer.strip()
+                matched = is_correct(predicted, gold)
+                
+                results.append({
+                    "record_id": record.id,
+                    "rec_idx": rec_idx,
+                    "q_idx": i + 1,
+                    "gold": gold,
+                    "pred": predicted,
+                    "matched": matched,
+                })
+            
+            return results
+    
+    async def run_evaluation():
+        records = data_loader.get_sample(split, limit)
+        semaphore = asyncio.Semaphore(concurrency)
+        
+        rprint(f"[bold blue]Async evaluating on {split} split (limit: {limit}, concurrency: {concurrency})[/bold blue]")
+        
+        tasks = [
+            process_record(record, idx, semaphore) 
+            for idx, record in enumerate(records, 1)
+        ]
+        
+        all_results = await asyncio.gather(*tasks)
+        
+        # Flatten and count
+        correct = 0
+        total = 0
+        for record_results in all_results:
+            for r in record_results:
+                total += 1
+                if r["matched"]:
+                    correct += 1
+                status = "[green]✓[/green]" if r["matched"] else "[red]✗[/red]"
+                rprint(f"  Record {r['rec_idx']} Q{r['q_idx']}: {status} (gold: {r['gold']}, pred: {r['pred'][:40]})")
+        
+        accuracy = correct / total if total > 0 else 0
+        rprint(f"\n[bold]Accuracy: {correct}/{total} = {accuracy:.2%}[/bold]")
+    
+    asyncio.run(run_evaluation())
+
+
 if __name__ == "__main__":
     app()
