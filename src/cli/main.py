@@ -266,6 +266,7 @@ def evaluate_async(
     split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
     limit: int = typer.Option(10, help="Limit number of records to evaluate"),
     concurrency: int = typer.Option(5, help="Number of concurrent records to process"),
+    verbose: bool = typer.Option(False, "-v", help="Show detailed errors with table"),
 ) -> None:
     """Evaluate agent performance with async parallel processing."""
     import asyncio
@@ -295,9 +296,11 @@ def evaluate_async(
                     "record_id": record.id,
                     "rec_idx": rec_idx,
                     "q_idx": i + 1,
+                    "question": question,
                     "gold": gold,
                     "pred": predicted,
                     "matched": matched,
+                    "table": record.doc.table,
                 })
             
             return results
@@ -315,19 +318,38 @@ def evaluate_async(
         
         all_results = await asyncio.gather(*tasks)
         
-        # Flatten and count
+        # Flatten, sort by record index, and count
+        flat_results = []
+        for record_results in all_results:
+            flat_results.extend(record_results)
+        flat_results.sort(key=lambda x: (x["rec_idx"], x["q_idx"]))
+        
         correct = 0
         total = 0
-        for record_results in all_results:
-            for r in record_results:
-                total += 1
-                if r["matched"]:
-                    correct += 1
-                status = "[green]✓[/green]" if r["matched"] else "[red]✗[/red]"
-                rprint(f"  Record {r['rec_idx']} Q{r['q_idx']}: {status} (gold: {r['gold']}, pred: {r['pred'][:40]})")
+        errors = []
+        
+        for r in flat_results:
+            total += 1
+            if r["matched"]:
+                correct += 1
+            else:
+                errors.append(r)
+            status = "[green]✓[/green]" if r["matched"] else "[red]✗[/red]"
+            rprint(f"  Record {r['rec_idx']} Q{r['q_idx']}: {status} (gold: {r['gold']}, pred: {r['pred'][:40]})")
         
         accuracy = correct / total if total > 0 else 0
         rprint(f"\n[bold]Accuracy: {correct}/{total} = {accuracy:.2%}[/bold]")
+        
+        # Show detailed errors if verbose
+        if verbose and errors:
+            rprint(f"\n[bold red]Errors ({len(errors)}):[/bold red]")
+            for err in errors[:5]:
+                rprint(f"\n[yellow]Record {err['rec_idx']} Q{err['q_idx']}: {err['record_id']}[/yellow]")
+                rprint(f"  Question: {err['question']}")
+                rprint(f"  Gold: {err['gold']}")
+                rprint(f"  Pred: {err['pred'][:80]}")
+                rprint(f"  Table preview:")
+                rprint(format_table_for_display(err['table']))
     
     asyncio.run(run_evaluation())
 

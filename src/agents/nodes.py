@@ -17,23 +17,35 @@ def get_llm() -> ChatGoogleGenerativeAI:
 
 
 def format_document_context(state: ConversationState) -> str:
-    """Format document for LLM context."""
+    """Format document for LLM context with proper table structure."""
     table_str = ""
     if state.table:
-        # Format table as markdown
-        rows = []
-        for row_key, row_data in state.table.items():
-            if isinstance(row_data, dict):
-                row_values = " | ".join(str(v) for v in row_data.values())
-                rows.append(f"| {row_key} | {row_values} |")
-        table_str = "\n".join(rows)
+        # Get all column headers from the first row
+        first_row = next(iter(state.table.values()), {})
+        if isinstance(first_row, dict):
+            columns = list(first_row.keys())
+            
+            # Build proper markdown table with headers
+            header = "| Row | " + " | ".join(columns) + " |"
+            separator = "|---" + "|---" * len(columns) + "|"
+            
+            rows = [header, separator]
+            for row_key, row_data in state.table.items():
+                if isinstance(row_data, dict):
+                    values = [str(row_data.get(col, "")) for col in columns]
+                    rows.append(f"| {row_key} | " + " | ".join(values) + " |")
+            
+            table_str = "\n".join(rows)
+        else:
+            # Fallback for non-dict row data
+            table_str = "\n".join(f"| {k} | {v} |" for k, v in state.table.items())
 
     return f"""## Document Context
 
 ### Text Before Table
 {state.pre_text}
 
-### Table
+### Financial Data Table
 {table_str}
 
 ### Text After Table
@@ -42,18 +54,24 @@ def format_document_context(state: ConversationState) -> str:
 
 
 def format_conversation_history(state: ConversationState) -> str:
-    """Format previous Q&A turns for context."""
-    if not state.answers_history:
+    """Format previous Q&A turns with full context for multi-hop reasoning."""
+    if not state.messages:
         return ""
 
     history = []
-    for i, answer in enumerate(state.answers_history):
-        history.append(f"Turn {i + 1} Answer: {answer}")
+    # Messages are pairs of HumanMessage (question) and AIMessage (answer)
+    for i, msg in enumerate(state.messages):
+        role = "Q" if hasattr(msg, 'type') and msg.type == "human" else "A"
+        if not hasattr(msg, 'type'):
+            # Fallback: alternate based on position
+            role = "Q" if i % 2 == 0 else "A"
+        turn_num = (i // 2) + 1
+        history.append(f"{role}{turn_num}: {msg.content}")
 
-    return "### Previous Answers in This Conversation\n" + "\n".join(history)
+    return "### Conversation History\n" + "\n".join(history)
 
 
-REASONING_PROMPT = """You are a financial document analyst. Answer questions about the provided financial document.
+REASONING_PROMPT = """You are a skilled financial document analyst. Answer questions about the provided financial document.
 
 {document_context}
 
@@ -68,6 +86,7 @@ REASONING_PROMPT = """You are a financial document analyst. Answer questions abo
 3. If calculation is needed, show your step-by-step work
 4. If the answer is numeric, for example a percentage, money, or a number, provide the value only. Percentages should be provided as decimals. Do not include any additional text.
 5. If the answer is yes/no, provide the value only. Do not include any additional text.
+6. If you still do not know the answer, respond with "I don't know".
 
 ## Response Format
 REASONING:
