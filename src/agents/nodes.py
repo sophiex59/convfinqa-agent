@@ -66,7 +66,8 @@ REASONING_PROMPT = """You are a financial document analyst. Answer questions abo
 1. First, identify what information you need from the document
 2. Extract relevant numbers or facts from the text and table
 3. If calculation is needed, show your step-by-step work
-4. Provide a clear, concise final answer
+4. If the answer is numeric, for example a percentage, money, or a number, provide the value only. Percentages should be provided as decimals. Do not include any additional text.
+5. If the answer is yes/no, provide the value only. Do not include any additional text.
 
 ## Response Format
 REASONING:

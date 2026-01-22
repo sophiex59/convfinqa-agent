@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     google_api_key: str = ""
 
     # Model Configuration
-    model_name: str = "gemini-2.0-flash"
+    model_name: str = "gemini-2.5-flash"
     temperature: float = 0.0
 
     # Paths

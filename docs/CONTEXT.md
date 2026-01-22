@@ -6,7 +6,7 @@ This document consolidates key context for the ConvFinQA agent project.
 
 ## Assignment Brief
 
-**Goal**: Build an LLM-driven prototype that answers conversational dialogue questions on financial documents using the ConvFinQA dataset.
+**Goal**: Build an Agentic prototype that answers conversational dialogue questions on any given financial document. The dataset of financial documents is provided in the `data` folder.
 
 **Time allocation**:
 - ~75% — Solution implementation

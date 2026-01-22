@@ -1,196 +1,278 @@
-# ConvFinQA Agent Architecture
+# Implementation Plan
 
-## Assignment Context
+## Problem Statement
 
-Build an LLM-driven prototype that answers **conversational dialogue questions** on financial documents using the ConvFinQA dataset (~3,458 records, ~14K questions). Key requirements:
-- Multi-hop numerical reasoning over text + tables
-- Demonstrate knowledge of modern LLM techniques (not just replicating the paper)
-- Clean code structure + report on method/findings
+Build an agentic prototype that answers conversational dialogue questions on financial documents using the ConvFinQA dataset.
 
----
-
-## Existing Repository Analysis
-
-| File | Status | Rationale |
-|------|--------|-----------|
-| `data/convfinqa_dataset.json` | ✅ Keep | Core dataset (3,037 train / 421 dev records) |
-| `dataset.md` | ✅ Keep | Excellent schema documentation |
-| `pyproject.toml` (UV/hatch) | ❌ Replace | Switching to Poetry for better Docker/CI integration |
-| `src/main.py`, `logger.py` | ❌ Replace | Minimal boilerplate, fresh agent architecture needed |
-
-### Why Poetry over UV?
-
-| Aspect | Poetry | UV |
-|--------|--------|-----|
-| Docker integration | Excellent (`poetry install --no-root`) | Newer, less documented |
-| Lock file reliability | Battle-tested | Newer format |
-| IDE support | Excellent (PyCharm, VSCode) | Growing |
-| CI/CD examples | Abundant | Fewer |
-| Speed | Slower | ⚡ Much faster |
-
-**Decision**: Poetry — we prioritize ecosystem maturity and Docker integration over raw speed for this project.
+**Key challenges**:
+1. Multi-hop numerical reasoning (chained calculations)
+2. Table + text understanding
+3. Conversation context (references to previous answers)
+4. Format variations in answers
 
 ---
 
-## Architectural Decisions
+## Solution Architecture
 
-### 1. Agent Framework: LangGraph ✅
-
-**Options Explored:**
-
-| Framework | Pros | Cons |
-|-----------|------|------|
-| **LangGraph** | Graph-based flow control, state management, checkpointing | Steeper learning curve, LangChain ecosystem |
-| AutoGen | Multi-agent conversations | Overkill for structured QA |
-| CrewAI | Simple role metaphor | Less control over execution |
-| Custom | Full control | High development effort |
-
-**Decision**: LangGraph — Even for a simple system, the graph-based approach provides:
-- Clear visualization of conversation flow
-- Built-in state management for multi-turn dialogue
-- Easy to extend later without refactoring
-
-### 2. Document Processing: Direct LLM Ingestion ✅
-
-**Analysis of ConvFinQA documents:**
-```
-Total records: 3,458
-Document sizes (including table):
-  Min: 499 chars → ~125 tokens
-  Max: 14,886 chars → ~3,700 tokens
-  Avg: 4,177 chars → ~1,000 tokens
-```
-
-**Decision**: No PDF parsing needed. Documents are pre-extracted JSON with text + tables. Gemini 2.5's 1M+ token context handles these trivially.
-
-### 3. LLM Provider: Gemini 2.5 ✅
-
-| Provider | Context | Strengths |
-|----------|---------|-----------|
-| **Gemini 2.5** | 1M+ tokens | Native multimodal, excellent reasoning, cost-effective |
-| OpenAI GPT-4o | 128K tokens | Strong function calling |
-| Claude 3.5 | 200K tokens | Great reasoning |
-
-**Decision**: Gemini 2.5 — Massive context window (future-proofs for larger docs), strong structured output, good cost/performance ratio.
-
-### 4. Container Strategy: Single Container ✅
-
-```dockerfile
-FROM python:3.12-slim
-# All components in one image for MVP
-```
-
-**Decision**: Start simple. If agents need async execution later, we can add worker containers.
-
-### 5. Project Structure: Modular Monolith ✅
-
-```
-financial_document_parser/
-├── pyproject.toml              # Poetry config
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── src/
-│   ├── agents/                 # LangGraph agent definitions
-│   │   ├── graph.py            # Main conversation graph
-│   │   ├── nodes.py            # Individual agent nodes
-│   │   └── state.py            # Conversation state schema
-│   ├── tools/                  # Agent tools
-│   │   ├── calculator.py       # Numerical operations
-│   │   ├── table_lookup.py     # Table data extraction
-│   │   └── retriever.py        # Document retrieval
-│   ├── core/                   # Core logic
-│   │   ├── llm.py              # Gemini client
-│   │   ├── schemas.py          # Pydantic models
-│   │   └── config.py           # Settings management
-│   ├── evaluation/             # Metrics & evaluation
-│   │   └── metrics.py          # Accuracy calculations
-│   └── cli/                    # CLI interface
-│       └── main.py             # Typer app
-├── tests/
-├── data/                       # Symlink or copy from existing
-└── notebooks/                  # Exploration
-```
-
-### 6. Agent Tools
-
-The agent will need tools to handle multi-hop numerical reasoning:
-
-| Tool | Purpose | Example Use |
-|------|---------|-------------|
-| `calculate` | Execute arithmetic operations | `calculate("156.2 - 143.1")` → `13.1` |
-| `lookup_table` | Extract values from document table | `lookup_table("revenue", "2019")` → `1,234,567` |
-| `lookup_text` | Find facts in pre/post text | `lookup_text("total employees")` → `"12,500"` |
-| `compare` | Compare two values | `compare(100, 80, "percent_change")` → `25%` |
-| `format_answer` | Format final response | `format_answer(0.25, "percent")` → `"25%"` |
-
-### 7. Conversation & Evaluation Strategy
-
-**Conversation Flow:**
 ```mermaid
-graph LR
-    A[User Question] --> B[Parse Intent]
-    B --> C{Needs Calculation?}
-    C -->|Yes| D[Extract Values]
-    D --> E[Calculate]
-    E --> F[Format Response]
-    C -->|No| G[Direct Lookup]
-    G --> F
-    F --> H[Update State]
-    H --> I[Return Answer]
+flowchart TB
+    subgraph Input
+        D[Document: pre_text + table + post_text]
+        Q[Question]
+        H[Conversation History]
+    end
+
+    subgraph Agent
+        S[State Manager]
+        R[Reasoning Node]
+        U[Update History Node]
+    end
+
+    subgraph LLM
+        G[Gemini 2.5 Flash]
+    end
+
+    subgraph Tools
+        C[Calculator]
+        T[Table Lookup]
+        X[Text Search]
+    end
+
+    D --> S
+    Q --> S
+    H --> S
+    S --> R
+    R <--> G
+    R -.->|optional| C
+    R -.->|optional| T
+    R -.->|optional| X
+    R --> U
+    U --> A[Answer]
+    U --> H
 ```
-
-**Evaluation Metrics:**
-- **Execution Accuracy (Exe Acc)** — Primary metric from paper (does computed answer match gold?)
-- **Program Accuracy** — Does reasoning chain match expected DSL?
-- **Turn-level Accuracy** — Accuracy per conversation turn
-
-**Baseline Targets:**
-| Baseline | Exe Acc | Our Target |
-|----------|---------|------------|
-| Human Expert | 89.44% | — |
-| FinQANet (best) | 68.90% | ≥70% |
-| GPT-3 CoT | 40.63% | >> this |
 
 ---
 
-## Remaining Decisions (Updated)
+## Approach Options
 
-### ✅ Conversation mode: Multi-turn
-Support interactive multi-turn conversations, maintaining context across question turns.
+### Option A: Pure LLM (Minimal Tooling) ✅ Current Implementation
 
-### ✅ Error handling: Show reasoning trace + Log for analysis
-
-**Approach**: Display step-by-step reasoning for debugging. When errors occur, log them for offline analysis to improve prompting/agent design.
+The LLM handles everything: table parsing, calculations, and reasoning.
 
 ```
-Agent Response → Validate → Log result (success/failure with trace) → Return
+Prompt → LLM → Chain-of-thought reasoning → Answer
 ```
 
-No automatic retry/self-correction in initial implementation — we'll analyze errors externally rather than adding complexity. Can add self-correction later if patterns emerge.
+**Pros**:
+- Simple architecture
+- Modern LLMs are strong at arithmetic
+- Fewer failure points
 
-### ✅ Report format: Markdown
-Use `REPORT.md` for the final write-up.
+**Cons**:
+- Less control over calculations
+- Harder to debug specific failures
 
-### ✅ Evaluation strategy: Sample + test holdout
+**When to use**: MVP, rapid prototyping, strong base model
 
-**Dataset split**:
-| Split | Records | Usage |
-|-------|---------|-------|
-| Train | 3,037 | Few-shot examples, fine-tuning |
-| Dev | 421 | Iteration & hyperparameter tuning |
-| Test | 434 | Final evaluation (not in our JSON, but from paper) |
+### Option B: Tool-Augmented Agent ⚠️ Available but Optional
 
-> [!NOTE]
-> The provided JSON has train + dev. The paper mentions a test set of 434 records (held out for blind evaluation). For now, we'll sample from dev for fast iteration.
+LLM decides when to call explicit tools for calculations and lookups.
+
+```
+Prompt → LLM → [Tool Call?] → Tool Result → LLM → Answer
+```
+
+**Pros**:
+- Verifiable calculations
+- Explicit table lookups
+- Better debugging
+
+**Cons**:
+- Tool call overhead
+- Potential for tool misuse
+
+**When to use**: When calculation accuracy is critical
+
+### Option C: DSL Generation ❌ Not Implemented (Future)
+
+LLM generates a domain-specific language program, which is then executed.
+
+```
+Prompt → LLM → DSL Program → Executor → Answer
+```
+
+**Pros**:
+- Fully verifiable
+- Matches paper's approach
+- Can compare program accuracy
+
+**Cons**:
+- Complex to implement
+- Requires DSL parser
+
+**When to use**: Research, maximum accuracy
+
+---
+
+## Prompting Strategies
+
+### Strategy 1: Chain-of-Thought ✅ Implemented
+
+```
+You are a financial document analyst.
+
+[Document Context]
+
+[Conversation History]
+
+Question: {question}
+
+Think step by step:
+1. Identify what information you need
+2. Extract values from the document
+3. Perform any calculations
+4. Format your answer
+
+REASONING:
+[Your analysis]
+
+ANSWER:
+[Final answer]
+```
+
+### Strategy 2: Few-Shot Examples ⚠️ Future Enhancement
+
+Add 2-3 examples before the current question to demonstrate expected format.
+
+```
+Example 1:
+Q: What was revenue in 2019?
+A: Looking at the table, revenue for 2019 is $1.5M
+ANSWER: 1.5 million
+
+Example 2:
+Q: What was the change from 2018?
+A: Revenue 2019 was $1.5M, 2018 was $1.2M. Change = 1.5 - 1.2 = 0.3M
+ANSWER: 0.3 million
+
+Now answer:
+Q: {current_question}
+```
+
+### Strategy 3: Structured Output ⚠️ Future Enhancement
+
+Force JSON output for easier parsing.
+
+```python
+class Answer(BaseModel):
+    reasoning: str
+    calculation: Optional[str]
+    answer: str
+    confidence: float
+
+llm.with_structured_output(Answer)
+```
+
+---
+
+## Component Details
+
+### 1. State Management
+
+```python
+class ConversationState(BaseModel):
+    # Document context
+    record_id: str
+    pre_text: str
+    post_text: str
+    table: dict
+    
+    # Conversation
+    messages: list[Message]
+    current_question: str
+    current_answer: str
+    reasoning_trace: str
+    
+    # History
+    turn_index: int
+    answers_history: list[str]
+```
+
+### 2. Tools
+
+| Tool | Function | Input | Output |
+|------|----------|-------|--------|
+| `calculate` | Safe math eval | `"60.94 - 25.14"` | `35.8` |
+| `lookup_table` | Extract table value | `(table, "2007", "revenue")` | `1234567` |
+| `search_text` | Find text snippets | `(text, "total employees")` | `["...12,500 employees..."]` |
+| `percent_change` | Calculate % change | `(old, new)` | `0.25` |
+
+### 3. LLM Configuration
+
+| Parameter | Value | Rationale |
+|-----------|-------|-----------|
+| Model | `gemini-2.5-flash` | Best cost/performance |
+| Temperature | `0` | Deterministic for evaluation |
+| Context | Full document + history | Within context limits |
+
+---
+
+## Implementation Phases
+
+### Phase 1: MVP ✅ Complete
+- [x] LangGraph agent structure
+- [x] Basic chain-of-thought prompting
+- [x] State management
+- [x] CLI interface
+
+### Phase 2: Tools & Evaluation ✅ Complete
+- [x] Calculator tool
+- [x] Table lookup tool
+- [x] Text search tool
+- [x] Evaluation harness
+
+### Phase 3: Optimization (Current)
+- [ ] Numeric answer normalization
+- [ ] Error categorization
+- [ ] Results analysis
+- [ ] REPORT.md
+
+### Phase 4: Enhancements (Future)
+- [ ] Few-shot examples
+- [ ] Structured output
+- [ ] Program accuracy metric
+- [ ] DSL generation
+
+---
+
+## File Structure
+
+```
+src/
+├── agents/
+│   ├── graph.py          # LangGraph conversation graph
+│   ├── nodes.py          # Reasoning and update nodes
+│   └── state.py          # ConversationState schema
+├── tools/
+│   ├── calculator.py     # Safe math evaluation
+│   ├── table_lookup.py   # Table value extraction
+│   └── text_search.py    # Text search utilities
+├── core/
+│   ├── config.py         # Settings (API key, model)
+│   ├── schemas.py        # Pydantic models for dataset
+│   └── data_loader.py    # Dataset loading
+├── evaluation/
+│   └── metrics.py        # Accuracy calculations (TODO)
+└── cli/
+    └── main.py           # Typer CLI app
+```
 
 ---
 
 ## Next Steps
 
-1. ✅ Architecture decisions finalized
-2. → Set up Poetry + Docker infrastructure
-3. → Implement core agent with LangGraph
-4. → Add tools (calculator, table lookup)
-5. → Build evaluation harness
-6. → Run experiments & write report
+1. **Run full evaluation** on dev set with rate limit removed
+2. **Implement proper numeric comparison** in evaluation
+3. **Analyze errors** by category
+4. **Write REPORT.md** with findings
+5. **Create PR** to main branch
