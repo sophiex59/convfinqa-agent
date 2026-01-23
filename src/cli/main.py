@@ -97,6 +97,10 @@ def evaluate(
                     "matched": matched,
                     "tool_calls": tool_calls,
                     "todos": todos,
+                    # Store document context (same for all questions in record)
+                    "pre_text": record.doc.pre_text if i == 0 else None,
+                    "post_text": record.doc.post_text if i == 0 else None,
+                    "table": record.doc.table if i == 0 else None,
                 })
                 
                 history.append((question, predicted))
@@ -175,6 +179,21 @@ def evaluate(
                 rprint(f"[bold yellow]RECORD {rec_idx}: {record_id}[/bold yellow]")
                 rprint(f"[bold yellow]Score: {record_correct}/{record_total}[/bold yellow]")
                 rprint(f"[bold yellow]{'─'*60}[/bold yellow]")
+                
+                # Show document context (from first question in record)
+                first_q = record_results[0]
+                if first_q.get('pre_text'):
+                    rprint(f"\n[dim]─── PRE-TEXT ───[/dim]")
+                    rprint(f"[dim]{first_q['pre_text'][:500]}{'...' if len(first_q['pre_text']) > 500 else ''}[/dim]")
+                
+                if first_q.get('table'):
+                    rprint(f"\n[dim]─── TABLE ───[/dim]")
+                    import json
+                    rprint(f"[dim]{json.dumps(first_q['table'], indent=2)[:1000]}[/dim]")
+                
+                if first_q.get('post_text'):
+                    rprint(f"\n[dim]─── POST-TEXT ───[/dim]")
+                    rprint(f"[dim]{first_q['post_text'][:500]}{'...' if len(first_q['post_text']) > 500 else ''}[/dim]")
                 
                 for q in record_results:
                     status = "[green]✓[/green]" if q["matched"] else "[red]✗[/red]"
