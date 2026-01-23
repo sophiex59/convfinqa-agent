@@ -325,7 +325,7 @@ Begin by calling write_todos to plan your approach, then use tools to find the a
                 for tc in msg.tool_calls:
                     tool_calls.append(f"{tc['name']}({tc['args']})")
         
-        return final_answer, tool_calls
+        return final_answer, tool_calls, get_todos()
         
     except Exception as e:
-        return f"Error: {e}", []
+        return f"Error: {e}", [], []
