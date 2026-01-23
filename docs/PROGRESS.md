@@ -184,6 +184,55 @@ else:
 
 ---
 
+## Phase 9: Error Analysis (20 Records)
+
+### Detailed Evaluation
+Run on 20 records (81 questions) with verbose logging showing full document context.
+
+**Final Accuracy: 77.78%** (63/81 correct)
+
+### Error Patterns Identified
+
+| Record | Score | Root Cause |
+|--------|-------|------------|
+| **5** (RSG Fuel Hedges) | 0/4 | **Inverted ratio** — calculated 2018/2017 instead of 2017/2018 |
+| **10** (CDNS Stock) | 1/3 | **Wrong date range** — used wrong row for year interpretation |
+| **13** (PM Operating Income) | 6/7 | **Missing data** — 2015 net earnings not in table |
+| **15** (PM Comprehensive Losses) | 2/6 | **Sign confusion** — reported `-9402` but gold expects `9402` |
+| **16** (UNP Expenses) | 1/3 | **Format issue** — said "2.2 billion" not "2200" |
+| **17** (STT VaR) | 2/6 | **Wrong interpretation** — "variance" misunderstood |
+| **18** (BLK Notes) | 4/5 | **"Portion" = ratio** — gave absolute 1450, gold was 0.29293 |
+
+### Deep Dive: Key Error Types
+
+#### 1. Ratio Direction Errors (Records 5, 18)
+```
+Q: "how much did 2018 represent in relation to 2017?"
+Agent: 2018/2017 = 0.25
+Gold:  2017/2018 = 4.0  ← "in relation to" means denominator!
+```
+**Pattern:** "A in relation to B" should be A/B, but agent sometimes does B/A.
+
+#### 2. Sign Interpretation (Record 15)
+```
+Table:  "total accumulated other comprehensive losses": -9402.0
+Gold:   9402.0 (positive)
+Agent:  -9402 (raw value from table)
+```
+**Pattern:** When question says "losses", absolute value is expected.
+
+#### 3. Format Unity (Record 16)
+```
+Agent: "2.2 billion"
+Gold:  2200 (in millions)
+```
+**Pattern:** Agent preserves text format instead of normalizing to number.
+
+#### 4. Cascade Failures (Records 5, 10, 17)
+When Q1 is wrong, all subsequent dependent questions (Q3, Q4) fail because they use the wrong prior answer.
+
+---
+
 ## Final Results Summary
 
 | Phase | Accuracy | Key Change |
@@ -195,15 +244,47 @@ else:
 | 5. ReAct (simplified) | — | CLI cleanup |
 | 6. ReAct (concurrency fix) | 100%* | `contextvars` for async safety |
 | 7. ReAct (refactored) | 100%* | Clean tool structure |
-| 8. ReAct (final, 20 records) | **76.54%** | Larger evaluation (62/81 questions) |
+| 8. ReAct (% format fix) | 100%* | Percentage handling |
+| **9. ReAct (20 records)** | **77.78%** | Full evaluation (63/81 questions) |
 
 *Small sample (2 records)
+
+---
+
+## Insights & Learnings
+
+### Technical Insights
+
+1. **Evaluation first** — Invest in robust evaluation before optimizing the model
+2. **Concurrency is hard** — Global state + async = subtle bugs that tank accuracy
+3. **Simpler is better** — 4 CLI commands beats 18
+4. **Tool design matters** — `write_todos` adds interpretability and helps debug failures
+5. **Context pollution** — Each async task needs isolated state
+
+### Financial QA Insights
+
+6. **Ratio direction matters** — "A in relation to B" is ambiguous; LLMs often flip it
+7. **Signs are semantic** — "losses" should be positive even if table shows negative
+8. **Units must normalize** — "2.2 billion" ≠ 2200 without explicit conversion
+9. **Cascade failures multiply errors** — One wrong answer can doom an entire conversation
+10. **Table vs text** — Some answers are in text, not table; agent must know where to look
+
+### What Would Improve Accuracy
+
+| Fix | Estimated Impact |
+|-----|------------------|
+| Ratio direction in prompt | +4-6% (Records 5, 18) |
+| Unit normalization | +2% (Record 16) |
+| Sign handling for "losses" | +2% (Record 15) |
+| Few-shot examples | +5-10% |
 
 ---
 
 ## Git Commit History
 
 ```
+chore: adding logging for errors
+docs: progress doc added, evals updated with 76% results
 fix: uppack error
 fix: improve % logic
 refactor: deleted unused functions in main
@@ -214,21 +295,13 @@ feat: progress bar, changed concurrency
 
 ---
 
-## Lessons Learned
-
-1. **Evaluation first** — Invest in robust evaluation before optimizing the model
-2. **Concurrency is hard** — Global state + async = subtle bugs
-3. **Simpler is better** — 4 CLI commands beats 18
-4. **Tool design matters** — `write_todos` adds interpretability
-5. **Context pollution** — Each async task needs isolated state
-6. **Format handling** — Small parsing bugs cause big accuracy drops
-
----
-
 ## Future Work
 
-- [ ] Run larger evaluation (20+ records)
-- [ ] Add fuzzy matching to `lookup_value`
+- [ ] ~~Run larger evaluation (20+ records)~~ ✅ Done (77.78%)
+- [ ] Fix ratio direction in prompt
+- [ ] Add unit normalization (billion → number)
+- [ ] Handle sign semantics for "losses"
+- [ ] Add few-shot examples to system prompt
 - [ ] Implement retry logic for rate limiting
 - [ ] Add caching for repeated table lookups
-- [ ] Fine-tune prompts based on error analysis
+
