@@ -265,7 +265,7 @@ def analyze_answers(
 def evaluate_async(
     split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
     limit: int = typer.Option(10, help="Limit number of records to evaluate"),
-    concurrency: int = typer.Option(5, help="Number of concurrent records to process"),
+    concurrency: int = typer.Option(10, help="Number of concurrent records to process"),
     verbose: bool = typer.Option(False, "-v", help="Show detailed errors with table"),
 ) -> None:
     """Evaluate agent performance with async parallel processing."""
@@ -358,15 +358,17 @@ def evaluate_async(
 def evaluate_react(
     split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
     limit: int = typer.Option(5, help="Limit number of records to evaluate"),
+    offset: int = typer.Option(0, help="Skip first N records"),
     verbose: bool = typer.Option(False, "-v", help="Show tool calls"),
 ) -> None:
     """Evaluate using ReAct agent with tool calling."""
     from src.agents.react_agent import run_react_agent
     
-    rprint(f"[bold blue]ReAct evaluation on {split} split (limit: {limit})[/bold blue]")
+    rprint(f"[bold blue]ReAct evaluation on {split} split[/bold blue]")
+    rprint(f"  Records: {offset+1} to {offset+limit} (limit: {limit}, offset: {offset})")
     rprint("[dim]Using tools: write_todos, lookup_value, calculate, submit_answer[/dim]\n")
     
-    records = data_loader.get_sample(split, limit)
+    records = data_loader.get_sample(split, limit, offset)
     correct = 0
     total = 0
     
@@ -410,14 +412,16 @@ def evaluate_react(
 def evaluate_react_async(
     split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
     limit: int = typer.Option(10, help="Limit number of records to evaluate"),
-    concurrency: int = typer.Option(3, help="Number of concurrent records to process"),
+    offset: int = typer.Option(0, help="Skip first N records (e.g., --offset 80 --limit 20 for bottom 20 of 100)"),
+    concurrency: int = typer.Option(10, help="Number of concurrent records to process"),
     verbose: bool = typer.Option(False, "-v", help="Show detailed errors"),
 ) -> None:
     """Evaluate ReAct agent with async parallel processing."""
     import asyncio
+    from rich.progress import Progress, TaskID, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
     from src.agents.react_agent import run_react_agent_async
     
-    async def process_record(record, rec_idx: int, semaphore):
+    async def process_record(record, rec_idx: int, semaphore, progress: Progress, task_id: TaskID):
         async with semaphore:
             results = []
             history = []
@@ -449,20 +453,35 @@ def evaluate_react_async(
                 
                 history.append((question, predicted))
             
+            progress.advance(task_id)
             return results
     
     async def run_evaluation():
-        records = data_loader.get_sample(split, limit)
+        records = data_loader.get_sample(split, limit, offset)
         semaphore = asyncio.Semaphore(concurrency)
         
-        rprint(f"[bold blue]ReAct async evaluation on {split} (limit: {limit}, concurrency: {concurrency})[/bold blue]")
+        rprint(f"[bold blue]ReAct async evaluation on {split}[/bold blue]")
+        rprint(f"  Records: {offset+1} to {offset+len(records)} (limit: {limit}, offset: {offset})")
+        rprint(f"  Concurrency: {concurrency}")
+        rprint("")
         
-        tasks = [
-            process_record(record, idx, semaphore) 
-            for idx, record in enumerate(records, 1)
-        ]
-        
-        all_results = await asyncio.gather(*tasks)
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("({task.completed}/{task.total})"),
+            TimeElapsedColumn(),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task("Processing records...", total=len(records))
+            
+            tasks = [
+                process_record(record, offset + idx, semaphore, progress, task_id) 
+                for idx, record in enumerate(records, 1)
+            ]
+            
+            all_results = await asyncio.gather(*tasks)
         
         # Flatten and sort
         flat_results = []

@@ -43,11 +43,17 @@ class DataLoader:
         records = data.train if split == "train" else data.dev
         yield from records
 
-    def get_sample(self, split: str = "dev", n: int = 10) -> list[ConvFinQARecord]:
-        """Get a sample of records for testing."""
+    def get_sample(self, split: str = "dev", n: int = 10, offset: int = 0) -> list[ConvFinQARecord]:
+        """Get a sample of records for testing.
+        
+        Args:
+            split: Dataset split (train/dev)
+            n: Number of records to return
+            offset: Number of records to skip from the beginning
+        """
         data = self.load()
         records = data.train if split == "train" else data.dev
-        return records[:n]
+        return records[offset:offset + n]
 
 
 # Singleton data loader

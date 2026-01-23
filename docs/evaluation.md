@@ -149,17 +149,35 @@ Sample ensuring proportional representation of:
 
 ## Running Evaluation
 
+### CLI Commands
+
 ```bash
-# Quick test (10 records)
-poetry run convfinqa evaluate --limit 10
+# Pure LLM (no tools) - baseline
+poetry run convfinqa evaluate --limit 20
+poetry run convfinqa evaluate-async --limit 20 --concurrency 10
 
-# Full dev set
-poetry run convfinqa evaluate --split dev
-
-# Specific record with auto mode
-poetry run convfinqa chat "Single_MRO/2007/page_134.pdf-1"
-# Then type 'auto' to run all questions
+# ReAct agent (with tools)
+poetry run convfinqa evaluate-react --limit 10 -v
+poetry run convfinqa evaluate-react-async --limit 20 --concurrency 10 -v
 ```
+
+### Sampling Behavior
+
+**Sampling is deterministic** — `--limit N` always returns the **first N records** from the dev set in order. This ensures reproducible results across runs.
+
+To evaluate different records:
+- Use `--split train` for training set
+- Or modify `data_loader.get_sample()` to shuffle
+
+### Concurrency
+
+Default concurrency is **10 parallel records**. Each record's questions run sequentially (due to context dependencies), but multiple records process simultaneously.
+
+| Concurrency | ~Time for 20 records |
+|-------------|---------------------|
+| 1 | ~8 min |
+| 5 | ~2 min |
+| 10 | ~1.5 min |
 
 ---
 
