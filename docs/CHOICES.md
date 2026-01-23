@@ -157,12 +157,43 @@ Avg: 4,177 chars (~1,000 tokens)
 
 ---
 
+## 11. Tool-Calling Strategy (Phase 3)
+
+**Choice**: Minimal tool set with forced completion
+
+| Proposed Tool | Decision | Reasoning |
+|---------------|----------|-----------|
+| `lookup_value` | ✅ Keep | Most errors are value extraction, explicit lookup forces precision |
+| `calculate` | ✅ Keep | Verified arithmetic, already implemented |
+| `submit_answer` | ✅ Keep | Forces completion (no "I don't know"), standardizes format |
+| `write_todos` | ❌ Remove | Overhead. CoT prompting already provides planning |
+| `normalize_answer` | ❌ Merge | Combined into submit_answer for simplicity |
+
+**Rationale**: Analysis of 69% run showed most errors were value extraction, not calculation. A minimal tool set (3 tools) keeps complexity low while addressing the main error categories. The `submit_answer` tool forces completion and handles format normalization in one step.
+
+---
+
+## 12. Async Execution
+
+**Choice**: Parallel record processing with semaphore
+
+| Option | Speed | Complexity | Verdict |
+|--------|-------|------------|---------|
+| **asyncio + semaphore** | ~3-5x faster | Medium | ✅ Chosen |
+| Sequential | Slow | Low | ❌ |
+| Multiprocessing | Fast | High | ❌ |
+
+**Rationale**: Async evaluation with configurable concurrency (default 5) provides significant speedup without the complexity of multiprocessing. Questions within a record still run sequentially (dependency on previous answers).
+
+---
+
 ## Future Considerations
 
 Decisions deferred for potential future implementation:
 
-1. **Auto-retry with reflection** — If error patterns emerge
+1. **Auto-retry with reflection** — If error patterns emerge after tool-calling
 2. **Program accuracy metric** — Compare generated DSL to gold
-3. **Few-shot prompting** — Add exemplars for hard question types
-4. **Multi-container async** — For large-scale evaluation
-5. **Fine-tuning** — If base model performance is insufficient
+3. **Few-shot prompting** — Add exemplars for hard question types  
+4. **Critic agent** — Second LLM validates before submission
+5. **Fine-tuning** — If base model performance plateaus
+
