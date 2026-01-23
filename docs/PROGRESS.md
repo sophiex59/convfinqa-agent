@@ -245,9 +245,39 @@ When Q1 is wrong, all subsequent dependent questions (Q3, Q4) fail because they 
 | 6. ReAct (concurrency fix) | 100%* | `contextvars` for async safety |
 | 7. ReAct (refactored) | 100%* | Clean tool structure |
 | 8. ReAct (% format fix) | 100%* | Percentage handling |
-| **9. ReAct (20 records)** | **77.78%** | Full evaluation (63/81 questions) |
+| 9. ReAct (error analysis) | 77.78% | Full evaluation (63/81) |
+| **10. ReAct (prompt engineering)** | **80.25%** | Ratio/sign/money guidance (65/81) |
 
 *Small sample (2 records)
+
+---
+
+## Phase 10: Prompt Engineering Fixes
+
+### Changes Made
+Added to system prompt:
+1. **Ratio direction guidance** — "A in relation to B" = A/B (B is denominator)
+2. **Sign handling for losses** — Report absolute value when question says "losses"
+3. **Unit normalization** — Added "money" format to convert "2.2 billion" → 2200
+
+### Results: 80.25% (+2.47%)
+
+| Record | Before | After | Fix Applied |
+|--------|--------|-------|-------------|
+| **15** (PM Losses) | 2/6 | **6/6** ✓ | Sign handling worked! |
+| **16** (UNP Expenses) | 1/3 | **2/3** | Money format fixed Q1 |
+| **5** (RSG Hedges) | 0/4 | 0/4 | Ratio still inverted |
+| **10** (CDNS Stock) | 1/3 | 1/3 | Date range interpretation |
+
+### Remaining Issues
+
+| Issue | Records | Why Prompt Didn't Fix |
+|-------|---------|----------------------|
+| Ratio direction | 5, 18 | Agent still calculates A/B when gold expects B/A |
+| Date range parsing | 10 | "2015 to 2016" interpreted as start dates, not full year |
+| Semantic math | 16 Q3 | "costs repaired" means add, not subtract |
+| "Portion" = ratio | 18 | Agent gives absolute value, not portion |
+| "Variance" meaning | 17 | Unclear definition in VaR context |
 
 ---
 
@@ -264,25 +294,18 @@ When Q1 is wrong, all subsequent dependent questions (Q3, Q4) fail because they 
 ### Financial QA Insights
 
 6. **Ratio direction matters** — "A in relation to B" is ambiguous; LLMs often flip it
-7. **Signs are semantic** — "losses" should be positive even if table shows negative
-8. **Units must normalize** — "2.2 billion" ≠ 2200 without explicit conversion
+7. **Signs are semantic** — "losses" should be positive even if table shows negative ✓ FIXED
+8. **Units must normalize** — "2.2 billion" = 2200 (in millions) ✓ FIXED
 9. **Cascade failures multiply errors** — One wrong answer can doom an entire conversation
 10. **Table vs text** — Some answers are in text, not table; agent must know where to look
-
-### What Would Improve Accuracy
-
-| Fix | Estimated Impact |
-|-----|------------------|
-| Ratio direction in prompt | +4-6% (Records 5, 18) |
-| Unit normalization | +2% (Record 16) |
-| Sign handling for "losses" | +2% (Record 15) |
-| Few-shot examples | +5-10% |
+11. **Prompt engineering has limits** — Some semantic issues need few-shot examples or fine-tuning
 
 ---
 
 ## Git Commit History
 
 ```
+feat: prompt engineering and tool update. rm old files
 chore: adding logging for errors
 docs: progress doc added, evals updated with 76% results
 fix: uppack error
@@ -297,11 +320,10 @@ feat: progress bar, changed concurrency
 
 ## Future Work
 
-- [ ] ~~Run larger evaluation (20+ records)~~ ✅ Done (77.78%)
-- [ ] Fix ratio direction in prompt
-- [ ] Add unit normalization (billion → number)
-- [ ] Handle sign semantics for "losses"
+- [x] ~~Run larger evaluation (20+ records)~~ ✅ Done (77.78%)
+- [x] ~~Add unit normalization (billion → number)~~ ✅ Done (money format)
+- [x] ~~Handle sign semantics for "losses"~~ ✅ Done (prompt guidance)
+- [ ] Fix ratio direction (may need few-shot examples)
+- [ ] Handle "portion" = ratio explicitly
 - [ ] Add few-shot examples to system prompt
-- [ ] Implement retry logic for rate limiting
-- [ ] Add caching for repeated table lookups
-
+- [ ] Investigate date range interpretation
