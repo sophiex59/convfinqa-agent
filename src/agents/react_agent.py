@@ -1,0 +1,319 @@
+"""ReAct agent for financial document QA using LangGraph."""
+
+from typing import TypedDict, Annotated, Sequence
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langgraph.graph import StateGraph, END
+from langgraph.graph.message import add_messages
+from langgraph.prebuilt import ToolNode
+
+from src.tools.agent_tools import AGENT_TOOLS, set_table_context, clear_todos
+from src.core.config import settings
+
+
+class AgentState(TypedDict):
+    """State for the ReAct agent."""
+    messages: Annotated[Sequence[BaseMessage], add_messages]
+    final_answer: str
+    iterations: int
+
+
+SYSTEM_PROMPT = """You are a skilled financial document analyst. You answer questions about financial documents using tools.
+
+## Available Tools
+- write_todos(steps): Create a plan FIRST before doing anything else
+- lookup_value(row, column): Get a specific value from the table
+- calculate(expression): Perform arithmetic (use for ALL math)
+- submit_answer(value, format): Submit your final answer (REQUIRED to complete)
+
+## Rules
+1. ALWAYS call write_todos FIRST to plan your approach
+2. Use lookup_value to get exact values - don't guess from context
+3. Use calculate for ANY arithmetic - no mental math
+4. Format options: "number" (as-is), "percentage" (as decimal like 0.14), "yes", "no"
+5. You MUST call submit_answer to finish - this is the ONLY way to complete
+
+## Workflow
+1. Call write_todos with your plan
+2. Call lookup_value for each value you need
+3. Call calculate for any arithmetic
+4. Call submit_answer with your final answer
+
+Remember: For percentage calculations, the result should be a decimal (0.14 means 14%)."""
+
+
+def create_react_agent():
+    """Create a ReAct agent with tool calling."""
+    
+    # Initialize LLM
+    llm = ChatGoogleGenerativeAI(
+        model=settings.model_name,
+        temperature=0,
+        google_api_key=settings.google_api_key,
+    )
+    
+    # Bind tools to LLM
+    llm_with_tools = llm.bind_tools(AGENT_TOOLS)
+    
+    # Tool execution node
+    tool_node = ToolNode(AGENT_TOOLS)
+    
+    def should_continue(state: AgentState) -> str:
+        """Determine if agent should continue or stop."""
+        messages = state["messages"]
+        last_message = messages[-1]
+        
+        # Check iteration limit
+        if state.get("iterations", 0) >= 10:
+            return "end"
+        
+        # Check if we have a final answer
+        if state.get("final_answer"):
+            return "end"
+        
+        # Check if last message has tool calls
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            return "tools"
+        
+        return "end"
+    
+    def agent_node(state: AgentState) -> dict:
+        """Call the LLM to decide next action."""
+        messages = state["messages"]
+        response = llm_with_tools.invoke(messages)
+        
+        iterations = state.get("iterations", 0) + 1
+        
+        return {"messages": [response], "iterations": iterations}
+    
+    def process_tool_results(state: AgentState) -> dict:
+        """Process tool results and check for final answer."""
+        messages = state["messages"]
+        
+        # Look for FINAL_ANSWER in recent tool results
+        for msg in reversed(messages[-5:]):
+            if hasattr(msg, "content") and "FINAL_ANSWER:" in str(msg.content):
+                answer = str(msg.content).split("FINAL_ANSWER:")[1].strip()
+                return {"final_answer": answer}
+        
+        return {}
+    
+    # Build graph
+    workflow = StateGraph(AgentState)
+    
+    # Add nodes
+    workflow.add_node("agent", agent_node)
+    workflow.add_node("tools", tool_node)
+    workflow.add_node("process", process_tool_results)
+    
+    # Set entry point
+    workflow.set_entry_point("agent")
+    
+    # Add edges
+    workflow.add_conditional_edges(
+        "agent",
+        should_continue,
+        {
+            "tools": "tools",
+            "end": END,
+        }
+    )
+    workflow.add_edge("tools", "process")
+    workflow.add_edge("process", "agent")
+    
+    return workflow.compile()
+
+
+# Global compiled agent
+_react_agent = None
+
+
+def get_react_agent():
+    """Get or create the ReAct agent singleton."""
+    global _react_agent
+    if _react_agent is None:
+        _react_agent = create_react_agent()
+    return _react_agent
+
+
+def format_table_for_prompt(table: dict) -> str:
+    """Format table for the agent prompt."""
+    if not table:
+        return "(No table)"
+    
+    first_row = next(iter(table.values()), {})
+    if isinstance(first_row, dict):
+        columns = list(first_row.keys())
+        header = "| Row | " + " | ".join(columns) + " |"
+        separator = "|---" + "|---" * len(columns) + "|"
+        rows = [header, separator]
+        for row_key, row_data in table.items():
+            if isinstance(row_data, dict):
+                values = [str(row_data.get(col, "")) for col in columns]
+                rows.append(f"| {row_key} | " + " | ".join(values) + " |")
+        return "\n".join(rows)
+    else:
+        return "\n".join(f"| {k} | {v} |" for k, v in table.items())
+
+
+def format_history_for_prompt(history: list[tuple[str, str]]) -> str:
+    """Format Q&A history for prompt."""
+    if not history:
+        return "(First question)"
+    
+    lines = []
+    for i, (q, a) in enumerate(history, 1):
+        lines.append(f"Q{i}: {q}")
+        lines.append(f"A{i}: {a}")
+    return "\n".join(lines)
+
+
+def run_react_agent(
+    pre_text: str,
+    table: dict,
+    post_text: str,
+    question: str,
+    history: list[tuple[str, str]] = None,
+) -> tuple[str, list[str]]:
+    """
+    Run the ReAct agent on a question.
+    
+    Returns:
+        Tuple of (final_answer, tool_calls_log)
+    """
+    agent = get_react_agent()
+    
+    # Set table context for tools
+    set_table_context(table)
+    clear_todos()
+    
+    # Build user message
+    table_str = format_table_for_prompt(table)
+    history_str = format_history_for_prompt(history or [])
+    
+    user_message = f"""## Financial Document
+
+### Text Before Table
+{pre_text}
+
+### Financial Data Table
+{table_str}
+
+### Text After Table
+{post_text}
+
+### Conversation History
+{history_str}
+
+### Current Question
+{question}
+
+Begin by calling write_todos to plan your approach, then use tools to find the answer."""
+    
+    # Create initial messages
+    messages = [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content=user_message),
+    ]
+    
+    # Run agent
+    initial_state: AgentState = {
+        "messages": messages,
+        "final_answer": "",
+        "iterations": 0,
+    }
+    
+    try:
+        result = agent.invoke(initial_state)
+        
+        # Extract final answer
+        final_answer = result.get("final_answer", "")
+        
+        # If no answer found via submit_answer, try to extract from last AI message
+        if not final_answer:
+            for msg in reversed(result["messages"]):
+                if isinstance(msg, AIMessage) and msg.content:
+                    final_answer = str(msg.content)[:100]
+                    break
+        
+        # Log tool calls
+        tool_calls = []
+        for msg in result["messages"]:
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tool_calls.append(f"{tc['name']}({tc['args']})")
+        
+        return final_answer, tool_calls
+        
+    except Exception as e:
+        return f"Error: {e}", []
+
+
+async def run_react_agent_async(
+    pre_text: str,
+    table: dict,
+    post_text: str,
+    question: str,
+    history: list[tuple[str, str]] = None,
+) -> tuple[str, list[str]]:
+    """Async version of run_react_agent."""
+    agent = get_react_agent()
+    
+    # Set table context for tools
+    set_table_context(table)
+    clear_todos()
+    
+    # Build user message
+    table_str = format_table_for_prompt(table)
+    history_str = format_history_for_prompt(history or [])
+    
+    user_message = f"""## Financial Document
+
+### Text Before Table
+{pre_text}
+
+### Financial Data Table
+{table_str}
+
+### Text After Table
+{post_text}
+
+### Conversation History
+{history_str}
+
+### Current Question
+{question}
+
+Begin by calling write_todos to plan your approach, then use tools to find the answer."""
+    
+    messages = [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content=user_message),
+    ]
+    
+    initial_state: AgentState = {
+        "messages": messages,
+        "final_answer": "",
+        "iterations": 0,
+    }
+    
+    try:
+        result = await agent.ainvoke(initial_state)
+        
+        final_answer = result.get("final_answer", "")
+        if not final_answer:
+            for msg in reversed(result["messages"]):
+                if isinstance(msg, AIMessage) and msg.content:
+                    final_answer = str(msg.content)[:100]
+                    break
+        
+        tool_calls = []
+        for msg in result["messages"]:
+            if hasattr(msg, "tool_calls") and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    tool_calls.append(f"{tc['name']}({tc['args']})")
+        
+        return final_answer, tool_calls
+        
+    except Exception as e:
+        return f"Error: {e}", []

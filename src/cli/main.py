@@ -354,5 +354,150 @@ def evaluate_async(
     asyncio.run(run_evaluation())
 
 
+@app.command(name="evaluate-react")
+def evaluate_react(
+    split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
+    limit: int = typer.Option(5, help="Limit number of records to evaluate"),
+    verbose: bool = typer.Option(False, "-v", help="Show tool calls"),
+) -> None:
+    """Evaluate using ReAct agent with tool calling."""
+    from src.agents.react_agent import run_react_agent
+    
+    rprint(f"[bold blue]ReAct evaluation on {split} split (limit: {limit})[/bold blue]")
+    rprint("[dim]Using tools: write_todos, lookup_value, calculate, submit_answer[/dim]\n")
+    
+    records = data_loader.get_sample(split, limit)
+    correct = 0
+    total = 0
+    
+    for rec_idx, record in enumerate(records, 1):
+        rprint(f"\n[dim]Record {rec_idx}/{limit}: {record.id}[/dim]")
+        
+        history = []
+        
+        for i, question in enumerate(record.dialogue.conv_questions):
+            answer, tool_calls = run_react_agent(
+                pre_text=record.doc.pre_text,
+                table=record.doc.table,
+                post_text=record.doc.post_text,
+                question=question,
+                history=history,
+            )
+            
+            gold = str(record.dialogue.executed_answers[i])
+            predicted = answer.strip()
+            
+            matched = is_correct(predicted, gold)
+            if matched:
+                correct += 1
+            total += 1
+            
+            status = "[green]✓[/green]" if matched else "[red]✗[/red]"
+            rprint(f"  Q{i + 1}: {status} (gold: {gold}, pred: {predicted[:40]})")
+            
+            if verbose and tool_calls:
+                for tc in tool_calls[:5]:
+                    rprint(f"      [dim]→ {tc[:60]}[/dim]")
+            
+            # Add to history for next question
+            history.append((question, predicted))
+    
+    accuracy = correct / total if total > 0 else 0
+    rprint(f"\n[bold]Accuracy: {correct}/{total} = {accuracy:.2%}[/bold]")
+
+
+@app.command(name="evaluate-react-async")
+def evaluate_react_async(
+    split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
+    limit: int = typer.Option(10, help="Limit number of records to evaluate"),
+    concurrency: int = typer.Option(3, help="Number of concurrent records to process"),
+    verbose: bool = typer.Option(False, "-v", help="Show detailed errors"),
+) -> None:
+    """Evaluate ReAct agent with async parallel processing."""
+    import asyncio
+    from src.agents.react_agent import run_react_agent_async
+    
+    async def process_record(record, rec_idx: int, semaphore):
+        async with semaphore:
+            results = []
+            history = []
+            
+            for i, question in enumerate(record.dialogue.conv_questions):
+                answer, tool_calls = await run_react_agent_async(
+                    pre_text=record.doc.pre_text,
+                    table=record.doc.table,
+                    post_text=record.doc.post_text,
+                    question=question,
+                    history=history,
+                )
+                
+                gold = str(record.dialogue.executed_answers[i])
+                predicted = answer.strip()
+                matched = is_correct(predicted, gold)
+                
+                results.append({
+                    "record_id": record.id,
+                    "rec_idx": rec_idx,
+                    "q_idx": i + 1,
+                    "question": question,
+                    "gold": gold,
+                    "pred": predicted,
+                    "matched": matched,
+                    "tool_calls": tool_calls,
+                    "table": record.doc.table,
+                })
+                
+                history.append((question, predicted))
+            
+            return results
+    
+    async def run_evaluation():
+        records = data_loader.get_sample(split, limit)
+        semaphore = asyncio.Semaphore(concurrency)
+        
+        rprint(f"[bold blue]ReAct async evaluation on {split} (limit: {limit}, concurrency: {concurrency})[/bold blue]")
+        
+        tasks = [
+            process_record(record, idx, semaphore) 
+            for idx, record in enumerate(records, 1)
+        ]
+        
+        all_results = await asyncio.gather(*tasks)
+        
+        # Flatten and sort
+        flat_results = []
+        for record_results in all_results:
+            flat_results.extend(record_results)
+        flat_results.sort(key=lambda x: (x["rec_idx"], x["q_idx"]))
+        
+        correct = 0
+        total = 0
+        errors = []
+        
+        for r in flat_results:
+            total += 1
+            if r["matched"]:
+                correct += 1
+            else:
+                errors.append(r)
+            status = "[green]✓[/green]" if r["matched"] else "[red]✗[/red]"
+            rprint(f"  Record {r['rec_idx']} Q{r['q_idx']}: {status} (gold: {r['gold']}, pred: {r['pred'][:40]})")
+        
+        accuracy = correct / total if total > 0 else 0
+        rprint(f"\n[bold]Accuracy: {correct}/{total} = {accuracy:.2%}[/bold]")
+        
+        if verbose and errors:
+            rprint(f"\n[bold red]Errors ({len(errors)}):[/bold red]")
+            for err in errors[:5]:
+                rprint(f"\n[yellow]Record {err['rec_idx']} Q{err['q_idx']}: {err['record_id']}[/yellow]")
+                rprint(f"  Question: {err['question']}")
+                rprint(f"  Gold: {err['gold']}")
+                rprint(f"  Pred: {err['pred'][:80]}")
+                if err.get('tool_calls'):
+                    rprint(f"  Tools: {', '.join(err['tool_calls'][:3])}")
+    
+    asyncio.run(run_evaluation())
+
+
 if __name__ == "__main__":
     app()
