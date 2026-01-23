@@ -59,7 +59,7 @@ def create_react_agent():
     tool_node = ToolNode(AGENT_TOOLS)
     
     # Maximum iterations before giving up
-    MAX_ITERATIONS = 5
+    MAX_ITERATIONS = 10
     
     def should_continue(state: AgentState) -> str:
         """Determine if agent should continue or stop."""
@@ -82,7 +82,7 @@ def create_react_agent():
     
     def handle_limit_reached(state: AgentState) -> dict:
         """Handle iteration limit with graceful fallback."""
-        return {"final_answer": "[LIMIT] Could not find answer within 5 tool calls"}
+        return {"final_answer": "[LIMIT] Could not find answer within iteration limit"}
     
     def agent_node(state: AgentState) -> dict:
         """Call the LLM to decide next action."""

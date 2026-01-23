@@ -238,6 +238,126 @@ def list_records(
     for i, r in enumerate(records, 1):
         rprint(f"{i:3}. {r.id} ({len(r.dialogue.conv_questions)} questions)")
 
+@app.command()
+def trace(
+    record_id: str = typer.Argument(None, help="Record ID (or uses first dev record)"),
+    question: int = typer.Option(1, "-q", help="Question number (1-indexed)"),
+) -> None:
+    """Trace tool calls step-by-step for one question."""
+    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from src.tools import AGENT_TOOLS, set_table_context, clear_todos, get_todos
+    from src.agents.react_agent import SYSTEM_PROMPT, format_table_for_prompt, format_history_for_prompt
+    from src.core.config import settings
+    
+    # Get record
+    if record_id:
+        record = data_loader.get_record(record_id)
+        if not record:
+            rprint(f"[red]Record not found: {record_id}[/red]")
+            raise typer.Exit(1)
+    else:
+        records = data_loader.get_sample("dev", 1)
+        record = records[0]
+    
+    # Get question
+    q_idx = question - 1
+    if q_idx >= len(record.dialogue.conv_questions):
+        rprint(f"[red]Question {question} not found (max: {len(record.dialogue.conv_questions)})[/red]")
+        raise typer.Exit(1)
+    
+    q = record.dialogue.conv_questions[q_idx]
+    gold = record.dialogue.executed_answers[q_idx]
+    
+    rprint(f"\n[bold blue]Tracing: {record.id}[/bold blue]")
+    rprint(f"[bold]Question {question}:[/bold] {q}")
+    rprint(f"[dim]Gold answer: {gold}[/dim]\n")
+    
+    # Setup
+    set_table_context(record.doc.table)
+    clear_todos()
+    
+    llm = ChatGoogleGenerativeAI(
+        model=settings.model_name,
+        temperature=0,
+        google_api_key=settings.google_api_key,
+    )
+    llm_with_tools = llm.bind_tools(AGENT_TOOLS)
+    
+    # Build prompt
+    table_str = format_table_for_prompt(record.doc.table)
+    history_str = format_history_for_prompt([])
+    
+    user_message = f"""## Financial Document
+
+### Text Before Table
+{record.doc.pre_text}
+
+### Financial Data Table
+{table_str}
+
+### Text After Table
+{record.doc.post_text}
+
+### Conversation History
+{history_str}
+
+### Current Question
+{q}
+
+Begin by calling write_todos to plan your approach, then use tools to find the answer."""
+    
+    messages = [
+        SystemMessage(content=SYSTEM_PROMPT),
+        HumanMessage(content=user_message),
+    ]
+    
+    # Run agent loop with live output
+    max_iterations = 5
+    tool_map = {t.name: t for t in AGENT_TOOLS}
+    
+    for i in range(max_iterations):
+        rprint(f"[cyan]--- Iteration {i+1}/{max_iterations} ---[/cyan]")
+        
+        # Get LLM response
+        response = llm_with_tools.invoke(messages)
+        messages.append(response)
+        
+        # Check for tool calls
+        if not response.tool_calls:
+            rprint(f"[dim]No tool calls, LLM responded:[/dim]")
+            rprint(f"  {response.content[:200] if response.content else '(empty)'}")
+            break
+        
+        # Execute each tool call
+        for tc in response.tool_calls:
+            tool_name = tc["name"]
+            tool_args = tc["args"]
+            
+            rprint(f"[yellow]→ {tool_name}[/yellow]({tool_args})")
+            
+            # Execute tool
+            if tool_name in tool_map:
+                result = tool_map[tool_name].invoke(tool_args)
+                rprint(f"  [green]Result:[/green] {result[:100]}")
+                
+                # Check for final answer
+                if "FINAL_ANSWER:" in result:
+                    answer = result.split("FINAL_ANSWER:")[1].strip()
+                    matched = is_correct(answer, str(gold))
+                    status = "[green]✓ CORRECT[/green]" if matched else "[red]✗ WRONG[/red]"
+                    rprint(f"\n[bold]Final Answer: {answer}[/bold] {status}")
+                    rprint(f"[dim]Gold: {gold}[/dim]")
+                    return
+                
+                # Add tool result to messages (simplified)
+                from langchain_core.messages import ToolMessage
+                messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+    
+    rprint(f"\n[red]Hit iteration limit without answer[/red]")
+    if get_todos():
+        rprint(f"[cyan]Todos were:[/cyan] {get_todos()}")
+
 
 if __name__ == "__main__":
     app()
