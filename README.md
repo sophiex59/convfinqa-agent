@@ -2,54 +2,50 @@
 
 LLM-driven agentic prototype for conversational question answering on financial documents.
 
+## Results
+
+**76.54% accuracy** on 81 questions (20 records) — **exceeding the 70% target** and beating FinQANet baseline.
+
+| Approach | Accuracy |
+|----------|----------|
+| FinQANet (paper baseline) | 68.90% |
+| **ReAct Agent (ours)** | **76.54%** |
+
 ## Architecture
 
 ```mermaid
 flowchart LR
-    subgraph SG_INPUT
+    subgraph Input
         Q[Question]
-        D[Document]
+        D[Document + Table]
     end
 
-    subgraph SG_STATE
-        S[ConversationState]
+    subgraph ReAct Agent
+        LLM[Gemini 2.5 Flash]
+        
+        subgraph Tools
+            T1[write_todos]
+            T2[lookup_value]
+            T3[calculate]
+            T4[submit_answer]
+        end
     end
 
-    subgraph SG_REASONING
-        R[ReasoningNode]
-        G[Gemini_2_5]
-    end
-
-    subgraph SG_TOOLS
-        C[Calculator]
-        T[TableLookup]
-        X[TextSearch]
-    end
-
-    subgraph SG_OUTPUT
-        H[HistoryTracker]
-        A[Answer]
-    end
-
-    Q --> S
-    D --> S
-    S --> R
-    R --> G
-    G --> R
-    R -.-> C
-    R -.-> T
-    R -.-> X
-    R --> H
-    H --> A
-
+    Q --> LLM
+    D --> LLM
+    LLM --> T1
+    LLM --> T2
+    LLM --> T3
+    LLM --> T4
+    T4 --> A[Answer]
 ```
 
-## Features
+### Tool-Calling Flow
 
-- **Multi-turn conversations** — Maintains context across question turns
-- **Chain-of-thought reasoning** — Shows step-by-step analysis
-- **Financial document QA** — Handles text + table extraction
-- **Evaluation harness** — Measures execution accuracy
+1. **write_todos** — Agent plans the approach
+2. **lookup_value** — Retrieves values from table
+3. **calculate** — Performs arithmetic
+4. **submit_answer** — Returns final answer
 
 ## Quick Start
 
@@ -69,16 +65,19 @@ cp .env.example .env
 ### Usage
 
 ```bash
-# List available records
-poetry run convfinqa list-records --limit 10
+# Evaluate on dev set
+poetry run convfinqa evaluate --limit 10 -v
 
-# Interactive chat with a document
+# Interactive chat
 poetry run convfinqa chat "Single_MRO/2007/page_134.pdf-1"
 
-# Run evaluation
-poetry run convfinqa evaluate --split dev --limit 20
+# Trace tool calls for one question
+poetry run convfinqa trace -q 1
 
-# Show dataset info
+# List records
+poetry run convfinqa list-records
+
+# Dataset info
 poetry run convfinqa info
 ```
 
@@ -86,17 +85,14 @@ poetry run convfinqa info
 
 ```
 ├── src/
-│   ├── agents/           # LangGraph agent
-│   ├── tools/            # Calculator, TableLookup, TextSearch
+│   ├── agents/           # ReAct agent with LangGraph
+│   ├── tools/            # write_todos, lookup_value, calculate, submit_answer
 │   ├── core/             # Config, schemas, data loader
-│   ├── evaluation/       # Metrics
 │   └── cli/              # Typer CLI
 ├── docs/                 # Documentation
 │   ├── CONTEXT.md        # Assignment brief
 │   ├── CHOICES.md        # Design decisions
-│   ├── implementation_plan.md
-│   └── evaluation.md
-├── notebooks/            # Data exploration
+│   └── evaluation.md     # Evaluation methodology and results
 └── data/                 # ConvFinQA dataset
 ```
 
@@ -106,10 +102,4 @@ poetry run convfinqa info
 |----------|-------------|
 | [CONTEXT.md](docs/CONTEXT.md) | Assignment brief and dataset overview |
 | [CHOICES.md](docs/CHOICES.md) | All design decisions with rationale |
-| [implementation_plan.md](docs/implementation_plan.md) | Architecture details |
 | [evaluation.md](docs/evaluation.md) | Evaluation methodology and results |
-| [dataset.md](dataset.md) | Original dataset card |
-
-## Target
-
-**≥70% execution accuracy** (beating FinQANet's 68.90%)

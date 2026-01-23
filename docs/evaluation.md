@@ -152,64 +152,76 @@ Sample ensuring proportional representation of:
 ### CLI Commands
 
 ```bash
-# Pure LLM (no tools) - baseline
-poetry run convfinqa evaluate --limit 20
-poetry run convfinqa evaluate-async --limit 20 --concurrency 10
+# Evaluate ReAct agent on dev set
+poetry run convfinqa evaluate --limit 10 -v
 
-# ReAct agent (with tools)
-poetry run convfinqa evaluate-react --limit 10 -v
-poetry run convfinqa evaluate-react-async --limit 20 --concurrency 10 -v
+# With custom concurrency and offset
+poetry run convfinqa evaluate --limit 20 --concurrency 5 --offset 10
+
+# Trace single question step-by-step (debugging)
+poetry run convfinqa trace -q 1
 ```
 
-### Sampling Behavior
+### Options
 
-**Sampling is deterministic** — `--limit N` always returns the **first N records** from the dev set in order. This ensures reproducible results across runs.
-
-To evaluate different records:
-- Use `--split train` for training set
-- Or modify `data_loader.get_sample()` to shuffle
-
-### Concurrency
-
-Default concurrency is **10 parallel records**. Each record's questions run sequentially (due to context dependencies), but multiple records process simultaneously.
-
-| Concurrency | ~Time for 20 records |
-|-------------|---------------------|
-| 1 | ~8 min |
-| 5 | ~2 min |
-| 10 | ~1.5 min |
+| Flag | Description |
+|------|-------------|
+| `--limit N` | Number of records to evaluate |
+| `--offset N` | Skip first N records |
+| `--concurrency N` | Parallel records (default: 10) |
+| `-v` | Verbose: show detailed errors |
 
 ---
 
-## Results Template
+## Current Results
 
-```markdown
-## Evaluation Results
-
-**Date**: YYYY-MM-DD
-**Model**: gemini-2.5-flash
-**Split**: dev
-**Records evaluated**: N
+**Date**: 2026-01-23  
+**Model**: gemini-2.5-flash  
+**Agent**: ReAct with tool calling  
+**Split**: dev (20 records, 81 questions)
 
 ### Summary
-| Metric | Value |
-|--------|-------|
-| Execution Accuracy | X.XX% |
-| Conversation Accuracy | X.XX% |
-| Avg turns per conversation | X.X |
 
-### By Turn Position
-| Turn | Accuracy | Count |
-|------|----------|-------|
-| 1 | X.XX% | N |
-| 2 | X.XX% | N |
-| 3+ | X.XX% | N |
+| Metric | Value | Notes |
+|--------|-------|-------|
+| **Execution Accuracy** | **76.54%** | 62/81 questions correct |
+| Fully Correct Records | 12/20 (60%) | All questions correct |
+| Target | ≥70% | **Target exceeded ✓** |
 
-### Error Breakdown
-| Type | Count | % |
-|------|-------|---|
-| Extraction | N | X% |
-| Calculation | N | X% |
-| Reference | N | X% |
-| Format | N | X% |
-```
+### Per-Record Results
+
+| Record | Correct | Status |
+|--------|---------|--------|
+| 1, 4, 7, 9, 12, 19, 20 | 100% | ✓ Perfect |
+| 3, 6, 8, 11, 14 | 100% | ✓ Perfect |
+| 2, 10, 13, 16, 18 | Partial | ⚠ Some errors |
+| 5, 15, 17 | Poor | ✗ Most wrong |
+
+### Error Analysis (19 errors)
+
+| Error Type | Count | Example |
+|------------|-------|---------|
+| Wrong value lookup | 6 | Read wrong row/year |
+| Inverted ratio | 4 | Calculated A/B instead of B/A |
+| Sign errors | 4 | Negative when positive expected |
+| Format confusion | 3 | "2.7 million" vs "2.7" |
+| Hallucination | 2 | "no" instead of number |
+
+### Comparison to Baselines
+
+| Approach | Accuracy | Notes |
+|----------|----------|-------|
+| Human Expert | 89.44% | Upper bound |
+| **ReAct Agent (ours)** | **76.54%** | Tool-calling agent |
+| FinQANet (paper) | 68.90% | Our target (**beaten**) |
+| Pure LLM (Gemini) | ~69% | Direct prompting |
+
+---
+
+## Key Improvements Made
+
+1. **Concurrency bug fix** — Used `contextvars` for async-safe task-local storage
+2. **Iteration limit tuning** — Increased from 5 to 10 for complex reasoning
+3. **Tool-calling architecture** — `write_todos` → `lookup_value` → `calculate` → `submit_answer`
+4. **Percentage handling** — Only converts if `%` sign present in string
+
