@@ -1,6 +1,6 @@
 # Development Progress Diary
 
-A chronological record of the ConvFinQA agent development, documenting iterations, decisions, and learnings.
+A chronological record of the ConvFinQA agent development, documenting iterations, decisions, and learnings. NOTE: DO NOT REMOVE ANYTHING FROM THIS FILE - ONLY ADD NEW PHASES AND SUB-PHASES.
 
 ---
 

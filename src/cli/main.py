@@ -152,18 +152,46 @@ def evaluate(
         rprint(f"\n[bold]Accuracy: {correct}/{total} = {accuracy:.2%}[/bold]")
         
         if verbose and errors:
-            rprint(f"\n[bold red]Errors ({len(errors)}):[/bold red]")
-            for err in errors[:5]:
-                rprint(f"\n[yellow]Record {err['rec_idx']} Q{err['q_idx']}: {err['record_id']}[/yellow]")
-                rprint(f"  Question: {err['question']}")
-                rprint(f"  Gold: {err['gold']}")
-                rprint(f"  Pred: {err['pred'][:80]}")
-                if err.get('todos'):
-                    rprint(f"  [cyan]Todos:[/cyan]")
-                    for todo in err['todos'][:3]:
-                        rprint(f"    • {todo}")
-                if err.get('tool_calls'):
-                    rprint(f"  [dim]Tools: {', '.join(tc.split('(')[0] for tc in err['tool_calls'][:5])}[/dim]")
+            # Group results by record
+            results_by_record = {}
+            for r in flat_results:
+                rec_idx = r["rec_idx"]
+                if rec_idx not in results_by_record:
+                    results_by_record[rec_idx] = []
+                results_by_record[rec_idx].append(r)
+            
+            # Find records with any errors
+            failed_records = set(r["rec_idx"] for r in errors)
+            
+            rprint(f"\n[bold red]═══ DETAILED LOGS FOR FAILED RECORDS ({len(failed_records)}) ═══[/bold red]")
+            
+            for rec_idx in sorted(failed_records):
+                record_results = results_by_record[rec_idx]
+                record_correct = sum(1 for r in record_results if r["matched"])
+                record_total = len(record_results)
+                record_id = record_results[0]["record_id"]
+                
+                rprint(f"\n[bold yellow]{'─'*60}[/bold yellow]")
+                rprint(f"[bold yellow]RECORD {rec_idx}: {record_id}[/bold yellow]")
+                rprint(f"[bold yellow]Score: {record_correct}/{record_total}[/bold yellow]")
+                rprint(f"[bold yellow]{'─'*60}[/bold yellow]")
+                
+                for q in record_results:
+                    status = "[green]✓[/green]" if q["matched"] else "[red]✗[/red]"
+                    rprint(f"\n[cyan]Q{q['q_idx']}:[/cyan] {q['question']}")
+                    rprint(f"  [bold]Gold:[/bold] {q['gold']}")
+                    rprint(f"  [bold]Pred:[/bold] {q['pred']} {status}")
+                    
+                    if q.get('todos'):
+                        rprint(f"  [dim]Plan:[/dim]")
+                        for todo in q['todos']:
+                            rprint(f"    • {todo}")
+                    
+                    if q.get('tool_calls'):
+                        rprint(f"  [dim]Tools:[/dim]")
+                        for tc in q['tool_calls']:
+                            # Show tool name and args
+                            rprint(f"    → {tc}")
     
     asyncio.run(run_evaluation())
 
