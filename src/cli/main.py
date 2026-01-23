@@ -378,7 +378,7 @@ def evaluate_react(
         history = []
         
         for i, question in enumerate(record.dialogue.conv_questions):
-            answer, tool_calls = run_react_agent(
+            answer, tool_calls, todos = run_react_agent(
                 pre_text=record.doc.pre_text,
                 table=record.doc.table,
                 post_text=record.doc.post_text,
@@ -397,9 +397,12 @@ def evaluate_react(
             status = "[green]✓[/green]" if matched else "[red]✗[/red]"
             rprint(f"  Q{i + 1}: {status} (gold: {gold}, pred: {predicted[:40]})")
             
-            if verbose and tool_calls:
-                for tc in tool_calls[:5]:
-                    rprint(f"      [dim]→ {tc[:60]}[/dim]")
+            if verbose:
+                if todos:
+                    rprint(f"      [cyan]Plan: {' → '.join(todos[:3])}[/cyan]")
+                if tool_calls:
+                    for tc in tool_calls[:5]:
+                        rprint(f"      [dim]→ {tc[:60]}[/dim]")
             
             # Add to history for next question
             history.append((question, predicted))
@@ -413,21 +416,26 @@ def evaluate_react_async(
     split: str = typer.Option("dev", help="Dataset split to evaluate (train/dev)"),
     limit: int = typer.Option(10, help="Limit number of records to evaluate"),
     offset: int = typer.Option(0, help="Skip first N records (e.g., --offset 80 --limit 20 for bottom 20 of 100)"),
-    concurrency: int = typer.Option(10, help="Number of concurrent records to process"),
+    concurrency: int = typer.Option(5, help="Number of concurrent records to process"),
     verbose: bool = typer.Option(False, "-v", help="Show detailed errors"),
 ) -> None:
     """Evaluate ReAct agent with async parallel processing."""
     import asyncio
+    import time
     from rich.progress import Progress, TaskID, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
     from src.agents.react_agent import run_react_agent_async
     
     async def process_record(record, rec_idx: int, semaphore, progress: Progress, task_id: TaskID):
         async with semaphore:
+            start_time = time.time()
             results = []
             history = []
+            record_correct = 0
+            record_total = 0
+            has_error = False
             
             for i, question in enumerate(record.dialogue.conv_questions):
-                answer, tool_calls = await run_react_agent_async(
+                answer, tool_calls, todos = await run_react_agent_async(
                     pre_text=record.doc.pre_text,
                     table=record.doc.table,
                     post_text=record.doc.post_text,
@@ -439,6 +447,12 @@ def evaluate_react_async(
                 predicted = answer.strip()
                 matched = is_correct(predicted, gold)
                 
+                record_total += 1
+                if matched:
+                    record_correct += 1
+                if predicted.startswith("Error:") or predicted.startswith("[LIMIT]"):
+                    has_error = True
+                
                 results.append({
                     "record_id": record.id,
                     "rec_idx": rec_idx,
@@ -448,11 +462,16 @@ def evaluate_react_async(
                     "pred": predicted,
                     "matched": matched,
                     "tool_calls": tool_calls,
+                    "todos": todos,
                     "table": record.doc.table,
                 })
                 
                 history.append((question, predicted))
             
+            elapsed = time.time() - start_time
+            status = "[green]✓[/green]" if record_correct == record_total else "[yellow]⚠[/yellow]" if record_correct > 0 else "[red]✗[/red]"
+            error_note = " [dim](recursion limit)[/dim]" if has_error else ""
+            progress.console.print(f"  {status} Record {rec_idx}: {record_correct}/{record_total} ({elapsed:.1f}s){error_note}")
             progress.advance(task_id)
             return results
     
@@ -512,8 +531,12 @@ def evaluate_react_async(
                 rprint(f"  Question: {err['question']}")
                 rprint(f"  Gold: {err['gold']}")
                 rprint(f"  Pred: {err['pred'][:80]}")
+                if err.get('todos'):
+                    rprint(f"  [cyan]Todos:[/cyan]")
+                    for todo in err['todos'][:3]:
+                        rprint(f"    • {todo}")
                 if err.get('tool_calls'):
-                    rprint(f"  Tools: {', '.join(err['tool_calls'][:3])}")
+                    rprint(f"  [dim]Tools: {', '.join(tc.split('(')[0] for tc in err['tool_calls'][:5])}[/dim]")
     
     asyncio.run(run_evaluation())
 

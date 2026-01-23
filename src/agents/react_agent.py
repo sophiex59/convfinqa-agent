@@ -7,7 +7,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from src.tools.agent_tools import AGENT_TOOLS, set_table_context, clear_todos
+from src.tools import AGENT_TOOLS, set_table_context, clear_todos, get_todos
 from src.core.config import settings
 
 
@@ -58,14 +58,17 @@ def create_react_agent():
     # Tool execution node
     tool_node = ToolNode(AGENT_TOOLS)
     
+    # Maximum iterations before giving up
+    MAX_ITERATIONS = 5
+    
     def should_continue(state: AgentState) -> str:
         """Determine if agent should continue or stop."""
         messages = state["messages"]
         last_message = messages[-1]
         
-        # Check iteration limit
-        if state.get("iterations", 0) >= 10:
-            return "end"
+        # Check iteration limit (fail gracefully)
+        if state.get("iterations", 0) >= MAX_ITERATIONS:
+            return "limit_reached"
         
         # Check if we have a final answer
         if state.get("final_answer"):
@@ -76,6 +79,10 @@ def create_react_agent():
             return "tools"
         
         return "end"
+    
+    def handle_limit_reached(state: AgentState) -> dict:
+        """Handle iteration limit with graceful fallback."""
+        return {"final_answer": "[LIMIT] Could not find answer within 5 tool calls"}
     
     def agent_node(state: AgentState) -> dict:
         """Call the LLM to decide next action."""
@@ -109,6 +116,9 @@ def create_react_agent():
     # Set entry point
     workflow.set_entry_point("agent")
     
+    # Add fallback node
+    workflow.add_node("limit_reached", handle_limit_reached)
+    
     # Add edges
     workflow.add_conditional_edges(
         "agent",
@@ -116,10 +126,12 @@ def create_react_agent():
         {
             "tools": "tools",
             "end": END,
+            "limit_reached": "limit_reached",
         }
     )
     workflow.add_edge("tools", "process")
     workflow.add_edge("process", "agent")
+    workflow.add_edge("limit_reached", END)
     
     return workflow.compile()
 
@@ -243,10 +255,10 @@ Begin by calling write_todos to plan your approach, then use tools to find the a
                 for tc in msg.tool_calls:
                     tool_calls.append(f"{tc['name']}({tc['args']})")
         
-        return final_answer, tool_calls
+        return final_answer, tool_calls, get_todos()
         
     except Exception as e:
-        return f"Error: {e}", []
+        return f"Error: {e}", [], []
 
 
 async def run_react_agent_async(
