@@ -37,12 +37,14 @@ def submit_answer(value: Union[float, str], format: str = "number") -> str:
     elif format == "no":
         return "FINAL_ANSWER: no"
     elif format == "percentage":
+        # If value has % sign, convert to decimal (e.g., "142.4%" → 1.424)
+        # Otherwise, assume it's already a decimal (e.g., 1.42403)
         try:
-            num_value = float(value)
-            # If value looks like a percentage (e.g., 14.5), convert to decimal
-            if abs(num_value) > 1:
-                num_value = num_value / 100
-            # Round to 5 decimal places
+            str_value = str(value).strip()
+            if "%" in str_value:
+                num_value = float(str_value.replace("%", "")) / 100
+            else:
+                num_value = float(str_value)
             num_value = round(num_value, 5)
             return f"FINAL_ANSWER: {num_value}"
         except (ValueError, TypeError):
