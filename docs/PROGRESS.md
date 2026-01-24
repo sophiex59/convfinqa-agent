@@ -323,7 +323,25 @@ feat: progress bar, changed concurrency
 - [x] ~~Run larger evaluation (20+ records)~~ ✅ Done (77.78%)
 - [x] ~~Add unit normalization (billion → number)~~ ✅ Done (money format)
 - [x] ~~Handle sign semantics for "losses"~~ ✅ Done (prompt guidance)
+- [x] ~~Large scale evaluation (50 records)~~ ✅ Done (77.84%)
 - [ ] Fix ratio direction (may need few-shot examples)
 - [ ] Handle "portion" = ratio explicitly
 - [ ] Add few-shot examples to system prompt
 - [ ] Investigate date range interpretation
+
+---
+
+## Phase 11: Large Scale Evaluation & CLI Logging
+
+### Changes Made
+1. **Large Scale Run**: Evaluated 50 records (185 questions) to verify performance stability.
+2. **CLI Enhanced**: Added `--output` flag to `evaluate` command to redirect verbose logs to a file.
+3. **Bug Fixes**: Corrected flag naming and resolved `UnboundLocalError` in log formatting.
+
+### Results
+- **Execution Accuracy: 77.84%** (144/185 correct)
+- Performance is consistent across a larger dataset split.
+
+### Key Learnings
+- **Logging is critical**: Without file redirection, high-concurrency results are overwhelming and hard to analyze.
+- **Error patterns persist**: Large-scale data confirms that "ratio direction" and "date range" are the dominant failure modes.

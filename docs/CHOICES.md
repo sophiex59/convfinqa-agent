@@ -166,10 +166,10 @@ Avg: 4,177 chars (~1,000 tokens)
 | `lookup_value` | ✅ Keep | Most errors are value extraction, explicit lookup forces precision |
 | `calculate` | ✅ Keep | Verified arithmetic, already implemented |
 | `submit_answer` | ✅ Keep | Forces completion (no "I don't know"), standardizes format |
-| `write_todos` | ❌ Remove | Overhead. CoT prompting already provides planning |
+| `write_todos` | ✅ Keep | Planning tool used to structure the agent's multi-step approach |
 | `normalize_answer` | ❌ Merge | Combined into submit_answer for simplicity |
 
-**Rationale**: Analysis of 69% run showed most errors were value extraction, not calculation. A minimal tool set (3 tools) keeps complexity low while addressing the main error categories. The `submit_answer` tool forces completion and handles format normalization in one step.
+**Rationale**: Analysis of 69% run showed most errors were value extraction, not calculation. A minimal tool set (4 tools) keeps complexity low while addressing the main error categories. The `write_todos` tool was retained as it provides a structured "scratchpad" for the agent to plan its actions across multiple turns. The `submit_answer` tool forces completion and handles format normalization in one step.
 
 ---
 
@@ -184,6 +184,14 @@ Avg: 4,177 chars (~1,000 tokens)
 | Multiprocessing | Fast | High | ❌ |
 
 **Rationale**: Async evaluation with configurable concurrency (default 5) provides significant speedup without the complexity of multiprocessing. Questions within a record still run sequentially (dependency on previous answers).
+
+---
+
+## 13. State Management (Task-Local)
+
+**Choice**: contextvars
+
+**Rationale**: Since the agent runs in an async environment with parallel record processing, we needed a way to store "per-task" state (like the current document's table or the agent's todo list) without passing it through every function or risking cross-task contamination. `contextvars` provides an async-safe way to manage this state, ensuring each record processing task has its own isolated context.
 
 ---
 

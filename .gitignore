@@ -22,3 +22,5 @@ uv.lock
 
 
 docs/notes.md
+
+*.log

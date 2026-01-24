@@ -2,6 +2,10 @@
 
 import asyncio
 import time
+import json
+from pathlib import Path
+from typing import Optional
+from datetime import datetime
 
 import typer
 from rich import print as rprint
@@ -10,6 +14,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeEl
 
 from src.agents.react_agent import run_react_agent_async
 from src.core.data_loader import data_loader
+from src.core.utils import normalize_answer
 
 app = typer.Typer(
     name="convfinqa",
@@ -21,27 +26,12 @@ app = typer.Typer(
 console = Console()
 
 
-def normalize_answer(answer: str) -> float | str:
-    """Normalize answer for comparison."""
-    if not answer:
-        return ""
-    
-    s = str(answer).strip().lower()
-    s = s.replace("$", "").replace(",", "").replace(" million", "").replace(" billion", "")
-    s = s.replace("%", "").strip()
-    
-    try:
-        return float(s)
-    except ValueError:
-        return s
-
-
 def is_correct(pred: str, gold: str, tol: float = 0.02) -> bool:
     """Check if prediction matches gold with tolerance."""
     pred_norm = normalize_answer(pred)
     gold_norm = normalize_answer(gold)
     
-    if isinstance(pred_norm, float) and isinstance(gold_norm, float):
+    if isinstance(pred_norm, (float, int)) and isinstance(gold_norm, (float, int)):
         if gold_norm == 0:
             return abs(pred_norm) < tol
         return abs(pred_norm - gold_norm) / abs(gold_norm) < tol
@@ -55,7 +45,8 @@ def evaluate(
     limit: int = typer.Option(10, help="Number of records to evaluate"),
     offset: int = typer.Option(0, help="Skip first N records"),
     concurrency: int = typer.Option(10, help="Parallel records"),
-    verbose: bool = typer.Option(False, "-v", help="Show detailed errors"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed errors"),
+    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write detailed logs to file"),
 ) -> None:
     """Evaluate ReAct agent on the dataset."""
     
@@ -188,13 +179,12 @@ def evaluate(
                 
                 if first_q.get('table'):
                     rprint(f"\n[dim]─── TABLE ───[/dim]")
-                    import json
                     rprint(f"[dim]{json.dumps(first_q['table'], indent=2)[:1000]}[/dim]")
                 
                 if first_q.get('post_text'):
                     rprint(f"\n[dim]─── POST-TEXT ───[/dim]")
                     rprint(f"[dim]{first_q['post_text'][:500]}{'...' if len(first_q['post_text']) > 500 else ''}[/dim]")
-                
+
                 for q in record_results:
                     status = "[green]✓[/green]" if q["matched"] else "[red]✗[/red]"
                     rprint(f"\n[cyan]Q{q['q_idx']}:[/cyan] {q['question']}")
@@ -211,6 +201,77 @@ def evaluate(
                         for tc in q['tool_calls']:
                             # Show tool name and args
                             rprint(f"    → {tc}")
+
+        if verbose and output:
+            with open(output, "w") as f:
+                file_console = Console(file=f, force_terminal=False, width=120)
+                
+                file_console.print(f"Evaluation Run: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+                # 1. Summary Section
+                file_console.print(f"═══ EVALUATION SUMMARY ═══")
+                file_console.print(f"Split: {split}")
+                file_console.print(f"Records: {offset+1} to {offset+len(records)}")
+                file_console.print(f"Accuracy: {correct}/{total} = {accuracy:.2%}")
+                file_console.print(f"{'─'*60}")
+                
+                # 2. Per-Record Summary
+                file_console.print("\n═══ PER-RECORD RESULTS ═══")
+                results_by_record = {}
+                for r in flat_results:
+                    rec_idx = r["rec_idx"]
+                    if rec_idx not in results_by_record:
+                        results_by_record[rec_idx] = []
+                    results_by_record[rec_idx].append(r)
+                
+                for rec_idx in sorted(results_by_record.keys()):
+                    record_results = results_by_record[rec_idx]
+                    record_correct = sum(1 for r in record_results if r["matched"])
+                    record_total = len(record_results)
+                    status = "✓" if record_correct == record_total else "⚠" if record_correct > 0 else "✗"
+                    file_console.print(f"Record {rec_idx}: {status} {record_correct}/{record_total}")
+
+                # 3. Detailed Logs for Failed Records
+                if errors:
+                    file_console.print(f"\n═══ DETAILED LOGS FOR FAILED RECORDS ({len(failed_records)}) ═══")
+                    for rec_idx in sorted(failed_records):
+                        record_results = results_by_record[rec_idx]
+                        record_id = record_results[0]["record_id"]
+                        
+                        file_console.print(f"\n{'─'*60}")
+                        file_console.print(f"RECORD {rec_idx}: {record_id}")
+                        file_console.print(f"Score: {record_correct}/{record_total}")
+                        file_console.print(f"{'─'*60}")
+                        
+                        first_q = record_results[0]
+                        if first_q.get('pre_text'):
+                            file_console.print(f"\n─── PRE-TEXT ───")
+                            file_console.print(first_q['pre_text'])
+                        
+                        if first_q.get('table'):
+                            file_console.print(f"\n─── TABLE ───")
+                            file_console.print(json.dumps(first_q['table'], indent=2))
+                        
+                        if first_q.get('post_text'):
+                            file_console.print(f"\n─── POST-TEXT ───")
+                            file_console.print(first_q['post_text'])
+                        
+                        for q in record_results:
+                            status = "✓" if q["matched"] else "✗"
+                            file_console.print(f"\nQ{q['q_idx']}: {q['question']}")
+                            file_console.print(f"  Gold: {q['gold']}")
+                            file_console.print(f"  Pred: {q['pred']} {status}")
+                            
+                            if q.get('todos'):
+                                file_console.print(f"  Plan:")
+                                for todo in q['todos']:
+                                    file_console.print(f"    • {todo}")
+                            
+                            if q.get('tool_calls'):
+                                file_console.print(f"  Tools:")
+                                for tc in q['tool_calls']:
+                                    file_console.print(f"    → {tc}")
+            rprint(f"\n[bold green]Full results written to: {output}[/bold green]")
     
     asyncio.run(run_evaluation())
 
