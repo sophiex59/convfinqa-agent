@@ -1,12 +1,17 @@
 """Data loading utilities for ConvFinQA dataset."""
 
 import json
+import sys
 from pathlib import Path
 from typing import Iterator
 
 from src.core.config import settings
 from src.core.schemas import ConvFinQADataset, ConvFinQARecord
+from src.logger import get_logger
 
+logger = get_logger(__name__)
+
+# ... existing imports ...
 
 class DataLoader:
     """Load and access ConvFinQA dataset."""
@@ -20,8 +25,21 @@ class DataLoader:
         if self._data is not None:
             return self._data
 
-        with open(self.data_path) as f:
-            raw_data = json.load(f)
+        if not self.data_path.exists():
+            logger.error(f"Dataset file not found: {self.data_path}")
+            logger.error("Please ensure you have downloaded the dataset to the correct location.")
+            sys.exit(1)
+
+        try:
+            with open(self.data_path) as f:
+                raw_data = json.load(f)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse dataset file: {self.data_path}")
+            logger.error(f"JSON Error: {e}")
+            sys.exit(1)
+        except Exception as e:
+            logger.exception(f"Unexpected error loading dataset: {e}")
+            sys.exit(1)
 
         self._data = ConvFinQADataset(
             train=[ConvFinQARecord(**r) for r in raw_data["train"]],

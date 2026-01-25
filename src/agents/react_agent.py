@@ -9,7 +9,10 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from src.core.config import settings
+from src.logger import get_logger
 from src.tools import AGENT_TOOLS, clear_todos, get_todos, set_table_context
+
+logger = get_logger(__name__)
 
 
 class AgentState(TypedDict):
@@ -279,6 +282,7 @@ Begin by calling write_todos to plan your approach, then use tools to find the a
         return final_answer, tool_calls, get_todos()
 
     except Exception as e:
+        logger.exception("Agent execution failed")
         return f"Error: {e}", [], []
 
 
@@ -349,4 +353,5 @@ Begin by calling write_todos to plan your approach, then use tools to find the a
         return final_answer, tool_calls, get_todos()
 
     except Exception as e:
+        logger.exception("Async agent execution failed")
         return f"Error: {e}", [], []
