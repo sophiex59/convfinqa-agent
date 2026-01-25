@@ -45,6 +45,12 @@ When asked "how much does A represent IN RELATION TO B" or "A as a proportion of
 - Example: "2018 in relation to 2017" = 2018_value / 2017_value
 - If result is 0.25 but seems too small, CHECK if you should flip it (maybe 4.0 is expected)
 
+### Uncertainty & Refusal
+- If you cannot find the data in the table or text after searching, do NOT guess.
+- Do NOT make up numbers or use external knowledge.
+- If the answer is truly missing, submit_answer("N/A", "text").
+- Better to admit "N/A" than to hallucinate a wrong number.
+
 ### Unit Normalization
 Always submit raw numbers, NOT text units:
 - "2.2 billion" → submit 2200 (if context is millions) or 2200000000

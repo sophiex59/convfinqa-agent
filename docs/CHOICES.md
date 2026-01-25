@@ -225,4 +225,10 @@ Avg: 4,177 chars (~1,000 tokens)
 - **Integration Tests**: The agent is a complex state machine. Mocking the LLM allows us to verify that the *graph logic* (state transitions, tool calling, memory) works without incurring API costs or nondeterminism.
 - **Regression Tests**: The `evaluate` CLI command serves as the ultimate end-to-end regression test.
 
+**Tiered Evaluation Protocol**:
+1.  **Smoke Test** (`--limit 2`): Run on every local change. Cheap (<$0.01).
+2.  **Sanity Check** (`--limit 10`): Run before PR/commit. Quick estimate of accuracy.
+3.  **Full Benchmark** (`--split dev`): Run nightly or on release. Official score.
+
+
 

@@ -368,5 +368,33 @@ To harden the codebase for production by identifying weaknesses, refactoring tec
 
 ### Key Learnings
 - **Mocking Strategy**: Mocking the LLM at the `bind_tools` or `invoke` level is essential for testing agent logic deterministically.
-- **Schema Validation**: Strict Pydantic schemas in `data_loader` caught invalid mock data early, preventing runtime errors.
+---
+
+## Phase 13: Quality Assessment
+
+### Code Readability: Strong
+- **Type Safety**: Consistent usage makes data structures self-documenting.
+- **Modularity**: Split tools (`src/tools/`) and clean core/agent/cli separation reduced cognitive load.
+- **Configuration**: `src/core/config.py` removed "magic numbers" from logic.
+- **Critique**: System prompts are still embedded in `react_agent.py`; future work should extract them to `.md` files.
+
+### Test Coverage: Solid Foundation
+- **Logic Safety (100%)**: Core utilities and data loaders are fully regression-tested for edge cases (e.g., accounting negatives, bad JSON).
+- **Happy Path Integration**: The agent's mechanics are verified with mocked LLM responses.
+- **The "Gap"**: Unit tests cannot verify the LLM's "intelligence." The *real* correctness check relies on the regression suite (`evaluate` command) rather than unit tests.
+---
+
+## Phase 14: Data Science Strategy Pivot
+
+### Strategy Definition
+Evaluate agent utilizing a large-scale point-in-time evaluation instead of continuous stratified testing (`docs/DS_STRATEGY.md`).
+
+### Key Decisions
+1.  **Sampling**: Pivoted from **"Silver Set"** to **"Massive Evaluation"** (N=100+).
+    *   *Why*: Time pressure. Curating a Golden Set takes too long. A large N run provides a robust final metric for the report, even if it doesn't solve daily CI regression.
+2.  **Metrics**: Prioritized **Execution Accuracy** for the final readout.
+3.  **Limitations Accepted**:
+    *   **CI/CD Blind Spot**: We lack a stable signal for small daily changes.
+    *   **Regression Risk**: Without a fixed anchor set, we may silently break edge cases while improving the average.
+
 

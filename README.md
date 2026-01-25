@@ -109,6 +109,14 @@ poetry run convfinqa info
 └── data/                 # ConvFinQA dataset
 ```
 
+## Statistical Limitations
+
+From a Data Science perspective, the current evaluation results should be interpreted with the following caveats:
+
+1.  **Small Sample Size**: Routine testing uses a subset (N=20). The standard error on this sample size is approx. $\pm 9.5\%$, leading to wide confidence intervals.
+2.  **Selection Bias**: The "Fixed Set" approach favors regression stability over generalized representation. Scores on the fixed set may not perfectly predict performance on unseen data.
+3.  **Correctness Proxy**: We verify the *final answer*, not the *reasoning trace*. A correct number derived from incorrect logic is counted as a success (Type I error in evaluation).
+
 ## Documentation
 
 | Document | Description |

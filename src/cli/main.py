@@ -88,6 +88,7 @@ def evaluate(
                     "matched": matched,
                     "tool_calls": tool_calls,
                     "todos": todos,
+                    "is_rejected": has_error,  # Track rejection/error status
                     # Store document context (same for all questions in record)
                     "pre_text": record.doc.pre_text if i == 0 else None,
                     "post_text": record.doc.post_text if i == 0 else None,
@@ -98,7 +99,7 @@ def evaluate(
 
             elapsed = time.time() - start_time
             status = "[green]✓[/green]" if record_correct == record_total else "[yellow]⚠[/yellow]" if record_correct > 0 else "[red]✗[/red]"
-            error_note = " [dim](limit)[/dim]" if has_error else ""
+            error_note = " [dim](limit/error)[/dim]" if has_error else ""
             progress.console.print(f"  {status} Record {rec_idx}: {record_correct}/{record_total} ({elapsed:.1f}s){error_note}")
             progress.advance(task_id)
             return results
@@ -136,15 +137,21 @@ def evaluate(
 
         correct = sum(1 for r in flat_results if r["matched"])
         total = len(flat_results)
+        rejected = sum(1 for r in flat_results if r["is_rejected"])
         errors = [r for r in flat_results if not r["matched"]]
 
         # Print per-question results
         for r in flat_results:
             status = "[green]✓[/green]" if r["matched"] else "[red]✗[/red]"
-            rprint(f"  Record {r['rec_idx']} Q{r['q_idx']}: {status} (gold: {r['gold']}, pred: {r['pred'][:40]})")
+            rej_mark = " [yellow](REJECTED)[/yellow]" if r["is_rejected"] else ""
+            rprint(f"  Record {r['rec_idx']} Q{r['q_idx']}: {status} (gold: {r['gold']}, pred: {r['pred'][:40]}){rej_mark}")
 
         accuracy = correct / total if total > 0 else 0
+        rejection_rate = rejected / total if total > 0 else 0
+        
         rprint(f"\n[bold]Accuracy: {correct}/{total} = {accuracy:.2%}[/bold]")
+        rprint(f"[bold]Rejection Rate (Errors/Limits): {rejected}/{total} = {rejection_rate:.2%}[/bold]")
+
 
         if verbose and errors:
             # Group results by record
@@ -213,6 +220,7 @@ def evaluate(
                 file_console.print(f"Split: {split}")
                 file_console.print(f"Records: {offset+1} to {offset+len(records)}")
                 file_console.print(f"Accuracy: {correct}/{total} = {accuracy:.2%}")
+                file_console.print(f"Rejection Rate: {rejected}/{total} = {rejection_rate:.2%}")
                 file_console.print(f"{'─'*60}")
 
                 # 2. Per-Record Summary
