@@ -22,7 +22,7 @@ def submit_answer(value: Union[float, str], format: str = "number") -> str:
     """
     Submit the final answer. THIS IS THE ONLY WAY TO COMPLETE THE TASK.
     You MUST call this tool to finish - you cannot respond directly.
-    
+
     Args:
         value: The answer value (number or string)
         format: One of:
@@ -31,7 +31,7 @@ def submit_answer(value: Union[float, str], format: str = "number") -> str:
                 - "money": Convert billion/million to raw number ("2.2 billion" -> 2200000000)
                 - "yes": Return "yes"
                 - "no": Return "no"
-    
+
     Returns:
         Confirmation with FINAL_ANSWER marker that signals completion.
     """
@@ -39,7 +39,7 @@ def submit_answer(value: Union[float, str], format: str = "number") -> str:
         return "FINAL_ANSWER: yes"
     elif format == "no":
         return "FINAL_ANSWER: no"
-    
+
     # Use consolidated normalization logic
     norm_value = normalize_answer(value)
     return f"FINAL_ANSWER: {norm_value}"

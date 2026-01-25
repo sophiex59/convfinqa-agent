@@ -1,14 +1,15 @@
 """ReAct agent for financial document QA using LangGraph."""
 
-from typing import TypedDict, Annotated, Sequence
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, SystemMessage
+from typing import Annotated, Sequence, TypedDict
+
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
-from src.tools import AGENT_TOOLS, set_table_context, clear_todos, get_todos
 from src.core.config import settings
+from src.tools import AGENT_TOOLS, clear_todos, get_todos, set_table_context
 
 
 class AgentState(TypedDict):
@@ -41,7 +42,7 @@ When asked "how much does A represent IN RELATION TO B" or "A as a proportion of
 - Example: "2018 in relation to 2017" = 2018_value / 2017_value
 - If result is 0.25 but seems too small, CHECK if you should flip it (maybe 4.0 is expected)
 
-### Unit Normalization  
+### Unit Normalization
 Always submit raw numbers, NOT text units:
 - "2.2 billion" → submit 2200 (if context is millions) or 2200000000
 - "$ 3.5 million" → submit 3.5 or 3500000 depending on context
@@ -64,81 +65,81 @@ Remember: For percentage calculations, the result should be a decimal (0.14 mean
 
 def create_react_agent():
     """Create a ReAct agent with tool calling."""
-    
+
     # Initialize LLM
     llm = ChatGoogleGenerativeAI(
         model=settings.model_name,
         temperature=0,
         google_api_key=settings.google_api_key,
     )
-    
+
     # Bind tools to LLM
     llm_with_tools = llm.bind_tools(AGENT_TOOLS)
-    
+
     # Tool execution node
     tool_node = ToolNode(AGENT_TOOLS)
-    
+
     # Maximum iterations before giving up
-    MAX_ITERATIONS = 10
-    
+    max_iterations = 10
+
     def should_continue(state: AgentState) -> str:
         """Determine if agent should continue or stop."""
         messages = state["messages"]
         last_message = messages[-1]
-        
+
         # Check iteration limit (fail gracefully)
-        if state.get("iterations", 0) >= MAX_ITERATIONS:
+        if state.get("iterations", 0) >= max_iterations:
             return "limit_reached"
-        
+
         # Check if we have a final answer
         if state.get("final_answer"):
             return "end"
-        
+
         # Check if last message has tool calls
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
             return "tools"
-        
+
         return "end"
-    
+
     def handle_limit_reached(state: AgentState) -> dict:
         """Handle iteration limit with graceful fallback."""
         return {"final_answer": "[LIMIT] Could not find answer within iteration limit"}
-    
+
     def agent_node(state: AgentState) -> dict:
         """Call the LLM to decide next action."""
         messages = state["messages"]
         response = llm_with_tools.invoke(messages)
-        
+
         iterations = state.get("iterations", 0) + 1
-        
+
         return {"messages": [response], "iterations": iterations}
-    
+
     def process_tool_results(state: AgentState) -> dict:
         """Process tool results and check for final answer."""
         messages = state["messages"]
-        
+
         # Look for FINAL_ANSWER in recent tool results
         for msg in reversed(messages[-5:]):
             if hasattr(msg, "content") and "FINAL_ANSWER:" in str(msg.content):
                 answer = str(msg.content).split("FINAL_ANSWER:")[1].strip()
                 return {"final_answer": answer}
-        
+
         return {}
-    
+
     # Build graph
     workflow = StateGraph(AgentState)
-    
+
     # Add nodes
     workflow.add_node("agent", agent_node)
     workflow.add_node("tools", tool_node)
     workflow.add_node("process", process_tool_results)
-    
+
     # Set entry point
     workflow.set_entry_point("agent")
-    
+
     # Add fallback node
     workflow.add_node("limit_reached", handle_limit_reached)
-    
+
     # Add edges
     workflow.add_conditional_edges(
         "agent",
@@ -152,7 +153,7 @@ def create_react_agent():
     workflow.add_edge("tools", "process")
     workflow.add_edge("process", "agent")
     workflow.add_edge("limit_reached", END)
-    
+
     return workflow.compile()
 
 
@@ -172,7 +173,7 @@ def format_table_for_prompt(table: dict) -> str:
     """Format table for the agent prompt."""
     if not table:
         return "(No table)"
-    
+
     first_row = next(iter(table.values()), {})
     if isinstance(first_row, dict):
         columns = list(first_row.keys())
@@ -192,7 +193,7 @@ def format_history_for_prompt(history: list[tuple[str, str]]) -> str:
     """Format Q&A history for prompt."""
     if not history:
         return "(First question)"
-    
+
     lines = []
     for i, (q, a) in enumerate(history, 1):
         lines.append(f"Q{i}: {q}")
@@ -209,20 +210,20 @@ def run_react_agent(
 ) -> tuple[str, list[str]]:
     """
     Run the ReAct agent on a question.
-    
+
     Returns:
         Tuple of (final_answer, tool_calls_log)
     """
     agent = get_react_agent()
-    
+
     # Set table context for tools
     set_table_context(table)
     clear_todos()
-    
+
     # Build user message
     table_str = format_table_for_prompt(table)
     history_str = format_history_for_prompt(history or [])
-    
+
     user_message = f"""## Financial Document
 
 ### Text Before Table
@@ -241,42 +242,42 @@ def run_react_agent(
 {question}
 
 Begin by calling write_todos to plan your approach, then use tools to find the answer."""
-    
+
     # Create initial messages
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content=user_message),
     ]
-    
+
     # Run agent
     initial_state: AgentState = {
         "messages": messages,
         "final_answer": "",
         "iterations": 0,
     }
-    
+
     try:
         result = agent.invoke(initial_state)
-        
+
         # Extract final answer
         final_answer = result.get("final_answer", "")
-        
+
         # If no answer found via submit_answer, try to extract from last AI message
         if not final_answer:
             for msg in reversed(result["messages"]):
                 if isinstance(msg, AIMessage) and msg.content:
                     final_answer = str(msg.content)[:100]
                     break
-        
+
         # Log tool calls
         tool_calls = []
         for msg in result["messages"]:
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
                     tool_calls.append(f"{tc['name']}({tc['args']})")
-        
+
         return final_answer, tool_calls, get_todos()
-        
+
     except Exception as e:
         return f"Error: {e}", [], []
 
@@ -290,15 +291,15 @@ async def run_react_agent_async(
 ) -> tuple[str, list[str]]:
     """Async version of run_react_agent."""
     agent = get_react_agent()
-    
+
     # Set table context for tools
     set_table_context(table)
     clear_todos()
-    
+
     # Build user message
     table_str = format_table_for_prompt(table)
     history_str = format_history_for_prompt(history or [])
-    
+
     user_message = f"""## Financial Document
 
 ### Text Before Table
@@ -317,35 +318,35 @@ async def run_react_agent_async(
 {question}
 
 Begin by calling write_todos to plan your approach, then use tools to find the answer."""
-    
+
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
         HumanMessage(content=user_message),
     ]
-    
+
     initial_state: AgentState = {
         "messages": messages,
         "final_answer": "",
         "iterations": 0,
     }
-    
+
     try:
         result = await agent.ainvoke(initial_state)
-        
+
         final_answer = result.get("final_answer", "")
         if not final_answer:
             for msg in reversed(result["messages"]):
                 if isinstance(msg, AIMessage) and msg.content:
                     final_answer = str(msg.content)[:100]
                     break
-        
+
         tool_calls = []
         for msg in result["messages"]:
             if hasattr(msg, "tool_calls") and msg.tool_calls:
                 for tc in msg.tool_calls:
                     tool_calls.append(f"{tc['name']}({tc['args']})")
-        
+
         return final_answer, tool_calls, get_todos()
-        
+
     except Exception as e:
         return f"Error: {e}", [], []

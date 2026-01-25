@@ -18,14 +18,14 @@ def write_todos(steps: list[str]) -> str:
     """
     Create a detailed plan for answering the question.
     Call this FIRST to plan your approach before doing lookups or calculations.
-    
+
     Args:
         steps: List of specific steps to complete, e.g.:
                ["Look up 2007 revenue in table",
-                "Look up 2006 revenue in table", 
+                "Look up 2006 revenue in table",
                 "Calculate the difference",
                 "Calculate percentage change"]
-    
+
     Returns:
         Confirmation of your plan.
     """

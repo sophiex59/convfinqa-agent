@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from typing import Iterator
 
-from src.core.schemas import ConvFinQARecord, ConvFinQADataset
 from src.core.config import settings
+from src.core.schemas import ConvFinQADataset, ConvFinQARecord
 
 
 class DataLoader:
@@ -45,7 +45,7 @@ class DataLoader:
 
     def get_sample(self, split: str = "dev", n: int = 10, offset: int = 0) -> list[ConvFinQARecord]:
         """Get a sample of records for testing.
-        
+
         Args:
             split: Dataset split (train/dev)
             n: Number of records to return

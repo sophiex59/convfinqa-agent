@@ -166,10 +166,10 @@ Avg: 4,177 chars (~1,000 tokens)
 | `lookup_value` | ✅ Keep | Most errors are value extraction, explicit lookup forces precision |
 | `calculate` | ✅ Keep | Verified arithmetic, already implemented |
 | `submit_answer` | ✅ Keep | Forces completion (no "I don't know"), standardizes format |
-| `write_todos` | ✅ Keep | Planning tool used to structure the agent's multi-step approach |
+| `write_todos` | ✅ Keep | Planning tool used to structure the agent's multi-step approach and provide essential explainability |
 | `normalize_answer` | ❌ Merge | Combined into submit_answer for simplicity |
 
-**Rationale**: Analysis of 69% run showed most errors were value extraction, not calculation. A minimal tool set (4 tools) keeps complexity low while addressing the main error categories. The `write_todos` tool was retained as it provides a structured "scratchpad" for the agent to plan its actions across multiple turns. The `submit_answer` tool forces completion and handles format normalization in one step.
+**Rationale**: Analysis of 69% run showed most errors were value extraction, not calculation. A minimal tool set (4 tools) keeps complexity low while addressing the main error categories. The `submit_answer` tool forces completion and handles format normalization in one step.
 
 ---
 
