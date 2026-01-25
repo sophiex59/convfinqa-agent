@@ -398,3 +398,21 @@ Evaluate agent utilizing a large-scale point-in-time evaluation instead of conti
     *   **Regression Risk**: Without a fixed anchor set, we may silently break edge cases while improving the average.
 
 
+
+---
+
+## Phase 15: Log Analysis & Failure Categorization
+
+### Goal
+To understand the "why" behind the 74.5% accuracy and identify the remaining error modes.
+
+### Actions
+1.  **Scripted Extraction**: Wrote `src/scripts/extract_failures.py` to isolate failed records from the 4000-line log.
+2.  **Deep Dive Analysis**: Manually reviewed 37 failed records.
+3.  **Documentation**: Created `docs/FAILURE_ANALYSIS.md`.
+
+### Key Findings
+- **Unit Scaling (20-25%)**: The agent's strict "billions -> millions" conversion clashes with Gold labels that keep table units.
+- **Date Ambiguity (15%)**: Disagreements on inclusive counting (e.g., 2008-2012 = 5 years vs 4 years).
+- **True Validity**: accounting for Unit Scaling, the agent's logic is >80% accurate.
+

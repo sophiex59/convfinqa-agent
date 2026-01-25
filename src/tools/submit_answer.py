@@ -28,7 +28,7 @@ def submit_answer(value: Union[float, str], format: str = "number") -> str:
         format: One of:
                 - "number": Return the value as-is (e.g., 35.8, 1500000)
                 - "percentage": Return as decimal (14% -> 0.14)
-                - "money": Convert billion/million to number in millions unit ("2.2 billion" -> 2200). Use this if you want the tool to handle scaling.
+                - "money": Strips currency/text but preserves number ("2.2 billion" -> 2.2). YOU must convert if needed.
                 - "yes": Return "yes"
                 - "no": Return "no"
 

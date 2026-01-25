@@ -35,12 +35,11 @@ def normalize_answer(answer: Union[float, str, int]) -> Union[float, str]:
         is_negative = True
 
     # 4. Handle word multipliers (million/billion)
-    multiplier = 1
+    # NOTE: We DO NOT scale the number here. We only strip the words.
+    # The Agent is responsible for unit conversion if needed.
     if "billion" in s:
-        multiplier = 1000  # Scaling up to millions (standard base unit)
         s = s.replace("billion", "").strip()
     elif "million" in s:
-        multiplier = 1
         s = s.replace("million", "").strip()
 
     # 5. Attempt float conversion
@@ -50,7 +49,7 @@ def normalize_answer(answer: Union[float, str, int]) -> Union[float, str]:
         if not nums:
             return s
 
-        val = float(nums[0]) * multiplier
+        val = float(nums[0])
 
         # If it was a percentage, convert to decimal (e.g., 14.2 -> 0.142)
         if is_pct:

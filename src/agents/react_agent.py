@@ -52,11 +52,14 @@ When asked "how much does A represent IN RELATION TO B" or "A as a proportion of
 - Better to admit "N/A" than to hallucinate a wrong number.
 
 ### Unit Normalization
-### Unit Normalization
-- If it is money, use "money", and leave the answer as string with units:
-- "2.2 billion" → submit_answer("2.2 billion", format="money")
-- "$ 3.5 million" → submit_answer("3.5 million", format="money")
-- Look at other values in the table to determine the unit scale
+- The submit_answer tool does NOT convert units.
+- if the table says "2.2 billion" and you submit "2.2 billion", the result is 2.2.
+- If the question asks for the answer in MILLIONS, YOU must calculate 2.2 * 1000 = 2200.
+- ALWAYS check the question's requested unit vs the table's unit.
+
+### Date Counting
+- Inclusive counting: "2008 to 2012" is 5 years (2008, 2009, 2010, 2011, 2012).
+- "Change from 2008 to 2012" involves 2 specific years (End vs Start).
 
 ### Sign Handling for Losses
 When the question asks about "losses" or "decline":

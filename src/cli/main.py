@@ -76,7 +76,7 @@ def evaluate(
                 record_total += 1
                 if matched:
                     record_correct += 1
-                if predicted.startswith("Error:") or predicted.startswith("[LIMIT]") or predicted == "N/A":
+                if predicted.startswith("Error:") or predicted.startswith("[LIMIT]") or predicted.lower() == "n/a":
                     has_error = True
 
                 results.append({
