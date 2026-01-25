@@ -230,5 +230,33 @@ Avg: 4,177 chars (~1,000 tokens)
 2.  **Sanity Check** (`--limit 10`): Run before PR/commit. Quick estimate of accuracy.
 3.  **Full Benchmark** (`--split dev`): Run nightly or on release. Official score.
 
+---
+
+## 16. Data Science Sampling Strategy
+
+**Choice**: Large Point-in-Time Evaluation (N=100) on Dev Set
+
+| Option | Pros | Cons | Verdict |
+|--------|------|------|---------|
+| **Large Single Run (N=100)** | Statistically tighter error margin (±6%) | No continuous regression signal | ✅ Chosen |
+| Small Random Sample (N=20) | Fast | High variance (±22%), misses edge cases | ❌ |
+| Stratified Golden Set | Best for regression testing | High effort to curate | ❌ Deferred (Time) |
+
+**Rationale**: Given the time constraints, a single large-scale run provides a more reliable final metric for the report than small, noisy random samples. We accept the risk of not having granular regression testing for this MVP.
+
+---
+
+## 17. Reliability Metrics
+
+**Choice**: Rejection Rate (Calibration)
+
+| Option | Value | Complexity | Verdict |
+|--------|-------|------------|---------|
+| **Rejection Rate** | High (detects hallucinations) | Low (regex on output) | ✅ Chosen |
+| Logic Consistency | Very High (verifies reasoning) | High (requires gold traces) | ❌ Deferred (Complexity) |
+| Confidence Intervals | High (statistical rigor) | Medium (bootstrapping) | ❌ Deferred (Time) |
+
+**Rationale**: In financial QA, "I don't know" is better than a guess. We prioritized Rejection Rate to measure safety/hallucination. Rigorous statistical confidence intervals and logic tracing were descoped to focus on engineering robust tool use.
+
 
 

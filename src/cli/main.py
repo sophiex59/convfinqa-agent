@@ -45,6 +45,7 @@ def evaluate(
     limit: int = typer.Option(10, help="Number of records to evaluate"),
     offset: int = typer.Option(0, help="Skip first N records"),
     concurrency: int = typer.Option(10, help="Parallel records"),
+    shuffle: bool = typer.Option(False, "--shuffle", "-s", help="Randomize record selection"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed errors"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write detailed logs to file"),
 ) -> None:
@@ -75,7 +76,7 @@ def evaluate(
                 record_total += 1
                 if matched:
                     record_correct += 1
-                if predicted.startswith("Error:") or predicted.startswith("[LIMIT]"):
+                if predicted.startswith("Error:") or predicted.startswith("[LIMIT]") or predicted == "N/A":
                     has_error = True
 
                 results.append({
@@ -105,7 +106,7 @@ def evaluate(
             return results
 
     async def run_evaluation():
-        records = data_loader.get_sample(split, limit, offset)
+        records = data_loader.get_sample(split, limit, offset, shuffle=shuffle)
         semaphore = asyncio.Semaphore(concurrency)
 
         rprint(f"[bold blue]Evaluating on {split}[/bold blue]")
@@ -148,10 +149,9 @@ def evaluate(
 
         accuracy = correct / total if total > 0 else 0
         rejection_rate = rejected / total if total > 0 else 0
-        
+
         rprint(f"\n[bold]Accuracy: {correct}/{total} = {accuracy:.2%}[/bold]")
         rprint(f"[bold]Rejection Rate (Errors/Limits): {rejected}/{total} = {rejection_rate:.2%}[/bold]")
-
 
         if verbose and errors:
             # Group results by record
@@ -298,7 +298,7 @@ def chat(
     rprint(f"Questions available: {len(record.dialogue.conv_questions)}")
     rprint("Type 'auto' to run all questions, 'quit' to exit\n")
 
-    history = []
+    history: list[tuple[str, str]] = []
 
     while True:
         user_input = console.input("[bold cyan]You:[/bold cyan] ").strip()
@@ -360,7 +360,7 @@ def trace(
     question: int = typer.Option(1, "-q", help="Question number (1-indexed)"),
 ) -> None:
     """Trace tool calls step-by-step for one question."""
-    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     from src.agents.react_agent import (
@@ -445,35 +445,36 @@ Begin by calling write_todos to plan your approach, then use tools to find the a
         messages.append(response)
 
         # Check for tool calls
-        if not response.tool_calls:
+        if isinstance(response, AIMessage) and not response.tool_calls:
             rprint("[dim]No tool calls, LLM responded:[/dim]")
             rprint(f"  {response.content[:200] if response.content else '(empty)'}")
             break
 
         # Execute each tool call
-        for tc in response.tool_calls:
-            tool_name = tc["name"]
-            tool_args = tc["args"]
+        if isinstance(response, AIMessage) and response.tool_calls:
+            for tc in response.tool_calls:
+                tool_name = tc["name"]
+                tool_args = tc["args"]
 
-            rprint(f"[yellow]→ {tool_name}[/yellow]({tool_args})")
+                rprint(f"[yellow]→ {tool_name}[/yellow]({tool_args})")
 
-            # Execute tool
-            if tool_name in tool_map:
-                result = tool_map[tool_name].invoke(tool_args)
-                rprint(f"  [green]Result:[/green] {result[:100]}")
+                # Execute tool
+                if tool_name in tool_map:
+                    result = tool_map[tool_name].invoke(tool_args)
+                    rprint(f"  [green]Result:[/green] {result[:100]}")
 
-                # Check for final answer
-                if "FINAL_ANSWER:" in result:
-                    answer = result.split("FINAL_ANSWER:")[1].strip()
-                    matched = is_correct(answer, str(gold))
-                    status = "[green]✓ CORRECT[/green]" if matched else "[red]✗ WRONG[/red]"
-                    rprint(f"\n[bold]Final Answer: {answer}[/bold] {status}")
-                    rprint(f"[dim]Gold: {gold}[/dim]")
-                    return
+                    # Check for final answer
+                    if "FINAL_ANSWER:" in result:
+                        answer = result.split("FINAL_ANSWER:")[1].strip()
+                        matched = is_correct(answer, str(gold))
+                        status = "[green]✓ CORRECT[/green]" if matched else "[red]✗ WRONG[/red]"
+                        rprint(f"\n[bold]Final Answer: {answer}[/bold] {status}")
+                        rprint(f"[dim]Gold: {gold}[/dim]")
+                        return
 
-                # Add tool result to messages (simplified)
-                from langchain_core.messages import ToolMessage
-                messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
+                    # Add tool result to messages (simplified)
+                    from langchain_core.messages import ToolMessage
+                    messages.append(ToolMessage(content=result, tool_call_id=tc["id"]))
 
     rprint("\n[red]Hit iteration limit without answer[/red]")
     if get_todos():

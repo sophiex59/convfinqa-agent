@@ -52,9 +52,10 @@ When asked "how much does A represent IN RELATION TO B" or "A as a proportion of
 - Better to admit "N/A" than to hallucinate a wrong number.
 
 ### Unit Normalization
-Always submit raw numbers, NOT text units:
-- "2.2 billion" → submit 2200 (if context is millions) or 2200000000
-- "$ 3.5 million" → submit 3.5 or 3500000 depending on context
+### Unit Normalization
+- If it is money, use "money", and leave the answer as string with units:
+- "2.2 billion" → submit_answer("2.2 billion", format="money")
+- "$ 3.5 million" → submit_answer("3.5 million", format="money")
 - Look at other values in the table to determine the unit scale
 
 ### Sign Handling for Losses
@@ -215,8 +216,8 @@ def run_react_agent(
     table: dict,
     post_text: str,
     question: str,
-    history: list[tuple[str, str]] = None,
-) -> tuple[str, list[str]]:
+    history: list[tuple[str, str]] | None = None,
+) -> tuple[str, list[str], list[str]]:
     """
     Run the ReAct agent on a question.
 
@@ -297,8 +298,8 @@ async def run_react_agent_async(
     table: dict,
     post_text: str,
     question: str,
-    history: list[tuple[str, str]] = None,
-) -> tuple[str, list[str]]:
+    history: list[tuple[str, str]] | None = None,
+) -> tuple[str, list[str], list[str]]:
     """Async version of run_react_agent."""
     agent = get_react_agent()
 

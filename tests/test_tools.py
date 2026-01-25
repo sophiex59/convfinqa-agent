@@ -1,6 +1,8 @@
 import pytest
+
 from src.tools.calculate import calculate
-from src.tools.lookup_value import lookup_value, find_best_match
+from src.tools.lookup_value import lookup_value
+
 
 # --- calculate tests ---
 def test_calculate_basic():
@@ -23,7 +25,7 @@ def sample_table():
     return {
         "Revenue": {"2018": "100", "2019": "200"},
         "Net Income": {"2018": "50", "2019": "60"},
-        "Losses": {"2018": "(10)", "2019": "(20)"} 
+        "Losses": {"2018": "(10)", "2019": "(20)"}
     }
 
 def test_lookup_value_exact(sample_table):

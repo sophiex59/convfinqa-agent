@@ -61,16 +61,25 @@ class DataLoader:
         records = data.train if split == "train" else data.dev
         yield from records
 
-    def get_sample(self, split: str = "dev", n: int = 10, offset: int = 0) -> list[ConvFinQARecord]:
+    def get_sample(self, split: str = "dev", n: int = 10, offset: int = 0, shuffle: bool = False) -> list[ConvFinQARecord]:
         """Get a sample of records for testing.
 
         Args:
             split: Dataset split (train/dev)
             n: Number of records to return
             offset: Number of records to skip from the beginning
+            shuffle: Whether to randomize the selection
         """
         data = self.load()
         records = data.train if split == "train" else data.dev
+
+        if shuffle:
+            import random
+            # Use fixed seed for reproducibility within the run, but allow it to vary if needed
+            # For now, just shuffle copy to avoid mutating original list
+            records = list(records)
+            random.shuffle(records)
+
         return records[offset:offset + n]
 
 

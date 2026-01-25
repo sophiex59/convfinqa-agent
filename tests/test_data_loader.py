@@ -1,6 +1,8 @@
-import pytest
 import json
-from unittest.mock import patch, mock_open
+from unittest.mock import mock_open, patch
+
+import pytest
+
 from src.core.data_loader import DataLoader
 
 DATA_CONTENT = {
@@ -53,7 +55,7 @@ def test_load_success(mock_json_file):
         with patch("pathlib.Path.exists", return_value=True):
             loader = DataLoader("dummy.json")
             data = loader.load()
-            
+
             assert len(data.train) == 1
             assert len(data.dev) == 1
             assert data.train[0].id == "train_1"
@@ -80,5 +82,5 @@ def test_get_record(mock_json_file):
             record = loader.get_record("dev_1")
             assert record is not None
             assert record.id == "dev_1"
-            
+
             assert loader.get_record("missing_id") is None

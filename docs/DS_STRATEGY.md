@@ -126,3 +126,34 @@ We acknowledge that a point estimate (e.g., "76%") on N=20 has a massive Confide
 3.  Compute CI from percentiles of the resampled means.
 
 
+---
+
+## 7. Data Leakage & Evaluation Hygiene
+
+**Risk**: In conversational QA, "leakage" occurs if the model sees the future (Reference answers) or the Dev set during training/prompting.
+
+**Our Mitigation Strategy**:
+1.  **Strict Split Separation**:
+    *   **Train** (3k records): Used for few-shot examples and fine-tuning (if we were tuning).
+    *   **Dev** (421 records): Used for validation and prompt engineering.
+    *   **Test** (Held-out): We emulate a blind test set by never cherry-picking specific answers from the full Dev run to fix the code. We only look at aggregate error patterns.
+2.  **No Context Leaking**: The `contextvars` implementation ensures that State from Record A never bleeds into Record B. Each Async task is isolated.
+
+---
+
+## 8. Reliability vs. Hallucination
+
+**User Question**: *"How does Rejection Rate cover hallucination?"*
+
+**Analysis**:
+*   **Hallucination**: The agent confidently returns a wrong number (e.g., claiming `"2.5 million"` when the text says `"2.5 billion"`). This is a **Silent Failure**. It is dangerous in finance.
+*   **Rejection**: The agent returns `"I don't know"` or `"Data not found"`. This is a **Loud Failure**.
+
+**The Trade-off**:
+*   We want to maximize **Rejection Rate** on unanswerable questions (which should be 100%).
+*   We want to minimize **Hallucination Rate** on answerable questions.
+*   By tracking `Rejection Rate`, we can measure *Calibration*. If Rejection Rate is 0% but Accuracy is 70%, the agent is likely hallucinating on the difficult 30%. A healthy agent might have 70% Accuracy and 10% Rejection, meaning it "knows what it doesn't know."
+
+**Action**: We will update the Prompt to strictly enforce: *"If you cannot find the value, do NOT guess. Reply 'N/A'."*
+
+
