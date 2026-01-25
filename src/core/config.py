@@ -25,5 +25,8 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # Agent Configuration
+    max_iterations: int = 10
+
 
 settings = Settings()

@@ -426,7 +426,7 @@ Begin by calling write_todos to plan your approach, then use tools to find the a
     ]
 
     # Run agent loop with live output
-    max_iterations = 5
+    max_iterations = settings.max_iterations
     tool_map = {t.name: t for t in AGENT_TOOLS}
 
     for i in range(max_iterations):

@@ -26,7 +26,15 @@ def normalize_answer(answer: Union[float, str, int]) -> Union[float, str]:
     if is_pct:
         s = s.replace("%", "").strip()
 
-    # 3. Handle word multipliers (million/billion)
+    # 3. Handle accounting negatives (parentheses)
+    # Check this AFTER stripping $ but BEFORE other operations for best results
+    # Assumption: (100) -> -100
+    is_negative = False
+    if "(" in s and ")" in s:
+        s = s.replace("(", "").replace(")", "").strip()
+        is_negative = True
+
+    # 4. Handle word multipliers (million/billion)
     multiplier = 1
     if "billion" in s:
         multiplier = 1000  # Scaling up to millions (standard base unit)
@@ -35,7 +43,7 @@ def normalize_answer(answer: Union[float, str, int]) -> Union[float, str]:
         multiplier = 1
         s = s.replace("million", "").strip()
 
-    # 4. Attempt float conversion
+    # 5. Attempt float conversion
     try:
         # Extract first number-like string if multiple words remain
         nums = re.findall(r"-?\d+\.?\d*", s)
@@ -47,6 +55,10 @@ def normalize_answer(answer: Union[float, str, int]) -> Union[float, str]:
         # If it was a percentage, convert to decimal (e.g., 14.2 -> 0.142)
         if is_pct:
             val = val / 100
+
+        # Apply specific negative sign if parentheses were detected
+        if is_negative:
+            val = -abs(val)
 
         return round(val, 5)
     except (ValueError, IndexError):

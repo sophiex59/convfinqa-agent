@@ -83,7 +83,7 @@ def create_react_agent():
     tool_node = ToolNode(AGENT_TOOLS)
 
     # Maximum iterations before giving up
-    max_iterations = 10
+    max_iterations = settings.max_iterations
 
     def should_continue(state: AgentState) -> str:
         """Determine if agent should continue or stop."""
