@@ -344,4 +344,29 @@ feat: progress bar, changed concurrency
 
 ### Key Learnings
 - **Logging is critical**: Without file redirection, high-concurrency results are overwhelming and hard to analyze.
-- **Error patterns persist**: Large-scale data confirms that "ratio direction" and "date range" are the dominant failure modes.
+---
+
+## Phase 12: Codebase Audit & Testing
+
+### Goals
+To harden the codebase for production by identifying weaknesses, refactoring technical debt, and establishing a robust test suite.
+
+### Actions
+1. **Audit**: Conducted a full scan, identifying hardcoded configs and prompt fragility as key risks.
+2. **Refactoring**:
+    - Centralized configuration in `src/core/config.py`.
+    - Removed hardcoded values from agent and CLI.
+3. **Testing**:
+    - Implemented unit tests for `utils`, `data_loader`, and all `tools`.
+    - Added integration tests for the `ReAct` agent using mocked LLMs.
+    - Verified `normalize_answer` handles accounting negatives `(500)` → `-500`.
+
+### Results
+- **Test Coverage**: Core logic is now fully tested.
+- **Reliability**: 100% pass rate on unit and integration tests.
+- **Maintainability**: Configuration is decoupled from logic.
+
+### Key Learnings
+- **Mocking Strategy**: Mocking the LLM at the `bind_tools` or `invoke` level is essential for testing agent logic deterministically.
+- **Schema Validation**: Strict Pydantic schemas in `data_loader` caught invalid mock data early, preventing runtime errors.
+

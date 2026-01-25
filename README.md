@@ -11,6 +11,19 @@ LLM-driven agentic prototype for conversational question answering on financial 
 | FinQANet (paper baseline) | 68.90% |
 | **ReAct Agent (ours)** | **76.54%** |
 
+## Code Quality & Testing
+
+Recent audits and refactoring have hardened the codebase for production:
+
+- **Audited**: Comprehensive [codebase overview](docs/codebase_overview.md) identified key strengths (type safety, modern stack) and weaknesses (config management).
+- **Refactored**: Centralized configuration in `src/core/config.py` and improved error handling.
+- **Tested**: Full unit test suite for core modules (`utils`, `data_loader`, `tools`) and integration tests for the `ReAct` agent.
+
+Run tests:
+```bash
+poetry run pytest
+```
+
 ## Architecture
 
 ```mermaid

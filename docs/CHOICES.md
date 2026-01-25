@@ -195,13 +195,34 @@ Avg: 4,177 chars (~1,000 tokens)
 
 ---
 
-## Future Considerations
+## 14. Configuration Management
 
-Decisions deferred for potential future implementation:
+**Choice**: `pydantic-settings` initialized in `src/core/config.py`
 
-1. **Auto-retry with reflection** — If error patterns emerge after tool-calling
-2. **Program accuracy metric** — Compare generated DSL to gold
-3. **Few-shot prompting** — Add exemplars for hard question types  
-4. **Critic agent** — Second LLM validates before submission
-5. **Fine-tuning** — If base model performance plateaus
+| Option | Pros | Cons | Verdict |
+|--------|------|------|---------|
+| **Centralized Config** | Type-safe, single source of truth, environment variable support | Boilerplate | ✅ Chosen |
+| Hardcoded Constants | Quick to prototype | Fragile, hard to test, scattered | ❌ (Refactored out) |
+| JSON/YAML Config | Flexible | No type safety, parsing overhead | ❌ |
+
+**Rationale**: As the agent grew, hardcoded values (like `max_iterations`, timeouts, and paths) became a liability. Centralizing them in a Pydantic `BaseSettings` class ensures type safety, easy override via `.env`, and simplifies testing by allowing config injection.
+
+---
+
+## 15. Testing Strategy
+
+**Choice**: Unit tests for components, Integration tests for agent workflow
+
+| Component | Test Type | Focus |
+|-----------|-----------|-------|
+| **Core Utilities** | Unit | Edge cases in `normalize_answer` (currency, negatives) |
+| **Data Loader** | Unit | Schema validation, file error handling |
+| **Tools** | Unit | Input/Output verification, safety checks |
+| **ReAct Agent** | Integration | Graph execution flow, tool usage patterns |
+
+**Rationale**: 
+- **Unit Tests**: Critical for the "foundation" layers (`utils`, `tools`) where logic is deterministic and failure is expensive.
+- **Integration Tests**: The agent is a complex state machine. Mocking the LLM allows us to verify that the *graph logic* (state transitions, tool calling, memory) works without incurring API costs or nondeterminism.
+- **Regression Tests**: The `evaluate` CLI command serves as the ultimate end-to-end regression test.
+
 
