@@ -1,76 +1,85 @@
-# ConvFinQA Agent: High-Precision Financial Reasoning System
+# ConvFinQA Agent: Financial Reasoning System
 
-**A deterministic, ReAct-based autonomous agent designed for numerical reasoning over complex financial documents.**
-
-![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
-![LangGraph](https://img.shields.io/badge/LangGraph-0.2-green)
-![Gemini 2.5](https://img.shields.io/badge/Gemini-2.5%20Flash-orange)
-![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen)
+**A ReAct-based autonomous agent designed for numerical reasoning over complex financial documents.**
 
 ---
 
-## 📖 Overview
+## Overview
 
-The **ConvFinQA Agent** is a specialized AI system engineered to solve the "Hallucination in Reasoning" problem common in Large Language Models (LLMs) when dealing with quantitative data. Unlike standard RAG implementations that rely on semantic similarity, this system uses a **Reasoning + Acting (ReAct)** architecture to:
+The **ConvFinQA Agent** is a specialised AI system using a **Reasoning + Acting (ReAct)** architecture to:
 
 1.  **Decompose** complex multi-hop financial questions into discrete logical steps.
 2.  **Navigate** semi-structured tabular data using a coordinate-based lookup system.
-3.  **Compute** answers using a deterministic Python sandbox, ensuring 100% arithmetic accuracy.
+3.  **Compute** answers using a deterministic Python sandbox
 4.  **Audit** its own reasoning process via a persistent state machine.
-
-Achieves **77.8% execution accuracy** on the ConvFinQA benchmark, outperforming specialized neural baselines (FinQANet) by ~9%.
 
 ---
 
-## 🏗️ Technical Architecture
+## Technical Architecture
 
-The system operates as a directed cyclic graph (DCG) using **LangGraph**. This state-machine approach allows for granular control over the agent's cognitive loop, enabling features like "Cognitive Braking" (planning before acting) and self-correction.
+The system operates using **LangGraph**. This state-machine approach allows for granular control over the agent's cognitive loop, enabling planning before acting and self-correction.
 
 ```mermaid
 graph TD
-    UserInput[User Query] --> StateLoad
+    %% Nodes
+    Start((Start))
     
-    subgraph "LangGraph State Machine"
-        StateLoad[Load Context & History]
-        NodePlan[Node: Plan/Reason]
-        
-        NodePlan -->|Decision| EdgeRouter
-        
-        EdgeRouter -->|Tool Call| ToolExec[Node: Execute Tools]
-        EdgeRouter -->|Final Answer| NodeSubmit[Node: Submit Answer]
-        
-        ToolExec -->|Output Feedback| NodePlan
+    subgraph "LangGraph ReAct Cycle"
+        AgentNode["Agent (LLM Decision)"]
+        ToolsNode["Tools (Execute Tools)"]
+        ProcessNode["Process (Check Results)"]
     end
     
-    NodeSubmit --> Output[Structured Response]
+    LimitNode["Limit Reached (Fallback)"]
+    End((End))
+
+    %% Flow
+    Start --> AgentNode
+    
+    %% Conditional Logic
+    AgentNode -->|Tool Call Detected| ToolsNode
+    AgentNode -->|Max Iterations Met| LimitNode
+    AgentNode -->|Final Answer Found| End
+
+    %% Feedback Loop
+    ToolsNode --> ProcessNode
+    ProcessNode -->|Update State| AgentNode
+    
+    %% Fallback
+    LimitNode --> End
+    
+    class AgentNode decision;
+    class ToolsNode tool;
+    class ProcessNode process;
+    class LimitNode error;
 ```
 
 ### Core Components
 
-*   **State Management (LangGraph)**: Maintains the conversation history, current "scratchpad" of thoughts, and tool outputs across reasoning turns.
-*   **LLM (Gemini 2.5 Flash)**: Selected for its 1M+ token context window (allowing full ingestion of financial tables without lossy chunking) and low latency.
+*   **State Management (LangGraph)**: Tracks conversation history, the agent’s current reasoning steps, and tool outputs across turns.
+*   **LLM (Gemini 2.5 Flash)**: Selected for its 1M+ token context window.
 *   **Tool Runtime**: A secure execution environment for:
-    *   `lookup_value(row, col)`: Precise tabular extraction with fuzzy matching for heterogeneous headers.
-    *   `calculate(expression)`: `eval()`-based Python math execution.
-    *   `write_todos(plan)`: Chain-of-Thought enforcement.
+    *   `lookup_value(row, col)`: Extracts table values reliably, with fuzzy matching for varied headers.
+    *   `calculate(expression)`: Performs Python arithmetic safely.
+    *   `write_todos(plan)`: Enforces a structured plan before execution.
 
 ---
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 | Component | Technology | Rationale |
 |-----------|------------|-----------|
-| **Runtime** | Python 3.12+ | Leverages latest typing features and async improvements. |
-| **Orchestration** | LangGraph | State-machine based control flow offering superior observability over standard LangChain chains. |
-| **Model** | Gemini 2.5 Flash | High throughput, massive context window (1M tokens), cost-effective ($0.30/1M). |
-| **CLI** | Typer | Robust command-line interface creation with type inference. |
-| **Config** | Pydantic Settings | Strictly typed environment variable management. |
-| **Package Mgr** | Poetry | Deterministic dependency resolution and virtual environment management. |
-| **Container** | Docker | Production-ready deployment. |
+| **Runtime** | Python 3.12+ | Modern typing, async support, and stability.|
+| **Orchestration** | LangGraph | State-machine control for predictable reasoning flow and observability. |
+| **Model** | Gemini 2.5 Flash | Handles large documents and supports low-latency inference. |
+| **CLI** | Typer | Simple and type-safe command-line interface. |
+| **Config** | Pydantic Settings | Strict environment variable and configuration management.|
+| **Package Mgr** | Poetry | Reproducible dependencies and isolated environments.|
+| **Container** | Docker | Ensures reproducible environments for deployment. |
 
 ---
 
-## 📂 Project Structure
+## Project Structure
 
 Following **Domain-Driven Design (DDD)** principles:
 
@@ -99,7 +108,7 @@ sophiex59/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -129,7 +138,7 @@ sophiex59/
 
 ---
 
-## 💻 Usage Guide
+## Usage Guide
 
 The system uses a unified CLI entry point: `convfinqa`.
 
@@ -161,9 +170,9 @@ poetry run convfinqa trace --question-id 1
 
 ---
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
-For reproducible environments or cloud deployment.
+Docker ensures consistent environments across machines. Local use does not require Docker, but it is recommended for production.
 
 1.  **Build Image**
     ```bash
@@ -173,17 +182,17 @@ For reproducible environments or cloud deployment.
 2.  **Run Container**
     ```bash
     # Interactive Mode
-    docker run -it --env-file .env convfinqa-agent convfinqa chat "Single_MRO/2007/page_134.pdf-1"
+    docker run -it --env-file .env convfinqa-agent poetry run convfinqa chat "Single_MRO/2007/page_134.pdf-1"
     
     # Evaluation Mode
-    docker run --env-file .env convfinqa-agent convfinqa evaluate --limit 10
+    docker run --env-file .env convfinqa-agent poetry run convfinqa evaluate --limit 10
     ```
 
 ---
 
-## 🧪 Development & Testing
+## Development & Testing
 
-We enforce strict code quality standards using `ruff`, `mypy`, and `pytest`.
+Code quality is enforced via `ruff`, `mypy`, and `pytest`.
 
 ### Running Tests
 ```bash
@@ -205,16 +214,7 @@ poetry run mypy .
 
 ---
 
-## 📚 Documentation Index
-
-*   **[Technical Report (REPORT.md)](REPORT.md)**: Deep dive into methodology, failure analysis, and data science strategy.
-*   **[Engineering Choices (docs/CHOICES.md)](docs/CHOICES.md)**: Justification for architectural decisions (LangGraph vs LangChain, etc.).
-*   **[Evaluation Protocol (docs/evaluation.md)](docs/evaluation.md)**: Metrics definition (EM, F1, Rejection Rate).
-*   **[Data Strategy (docs/DS_STRATEGY.md)](docs/DS_STRATEGY.md)**: Sampling and dataset analysis.
-
----
-
-## � Performance Metrics
+## Performance Metrics
 
 | Metric | ConvFinQA Agent (Ours) | Baseline (FinQANet) |
 |:-------|:-----------------------|:--------------------|
@@ -222,4 +222,4 @@ poetry run mypy .
 | **Rejection Rate** | **10.6%** | N/A |
 | **Latency (p95)** | **~5s / turn** | N/A |
 
-> **Note**: The explicit rejection rate is a safety feature. The agent is tuned to return `N/A` rather than hallucinate an answer when confidence is low or data is missing.
+**Note**: The explicit rejection rate is a safety mechanism. The agent is configured to return `N/A` rather than hallucinate an answer when data is insufficient.

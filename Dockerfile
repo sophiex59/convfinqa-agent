@@ -34,4 +34,4 @@ COPY data/ ./data/
 RUN poetry install --no-interaction --no-ansi --only-root
 
 # Default command
-CMD ["convfinqa", "--help"]
+CMD ["poetry", "run", "convfinqa", "--help"]
