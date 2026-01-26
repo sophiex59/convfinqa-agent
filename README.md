@@ -223,3 +223,7 @@ poetry run mypy .
 | **Latency (p95)** | **~5s / turn** | N/A |
 
 **Note**: The explicit rejection rate is a safety mechanism. The agent is configured to return `N/A` rather than hallucinate an answer when data is insufficient.
+
+
+## Notes:
+AI was used throughout the development process. I used Antigravity with Claude Sonnet 4.5 to design the system architecture and write the code, with documentation. I used Gemini 2.5 Flash to evaluate the system.
