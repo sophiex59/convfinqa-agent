@@ -48,6 +48,7 @@ def evaluate(
     shuffle: bool = typer.Option(False, "--shuffle", "-s", help="Randomize record selection"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed errors"),
     output: Optional[Path] = typer.Option(None, "--output", "-o", help="Write detailed logs to file"),
+    json_output: Optional[Path] = typer.Option(None, "--json-output", "-j", help="Write structured results to JSON file"),
 ) -> None:
     """Evaluate ReAct agent on the dataset."""
 
@@ -280,6 +281,11 @@ def evaluate(
                                 for tc in q["tool_calls"]:
                                     file_console.print(f"    → {tc}")
             rprint(f"\n[bold green]Full results written to: {output}[/bold green]")
+
+        if json_output:
+            with open(json_output, "w") as f:
+                json.dump(flat_results, f, indent=2, default=str)
+            rprint(f"[bold green]Structured results written to: {json_output}[/bold green]")
 
     asyncio.run(run_evaluation())
 

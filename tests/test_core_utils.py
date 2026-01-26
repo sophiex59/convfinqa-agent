@@ -20,10 +20,10 @@ def test_normalize_answer_multipliers():
     assert normalize_answer("5 million") == 5.0
     assert normalize_answer("1.5 million") == 1.5
 
-    # Billions are scaled by 1000
-    assert normalize_answer("2 billion") == 2000.0
-    assert normalize_answer("0.5 billion") == 500.0
-    assert normalize_answer("$ 3.2 billion") == 3200.0
+    # Billions should NOT be scaled, just stripped
+    assert normalize_answer("2 billion") == 2.0
+    assert normalize_answer("0.5 billion") == 0.5
+    assert normalize_answer("$ 3.2 billion") == 3.2
 
 def test_normalize_answer_mixed():
     # Percentage with other chars

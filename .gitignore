@@ -26,3 +26,6 @@ docs/notes.md
 *.log
 
 REPORT.md
+
+*.json
+*.txt

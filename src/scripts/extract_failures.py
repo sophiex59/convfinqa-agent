@@ -29,4 +29,7 @@ def extract_failures(log_path: str, output_path: str):
     print(f"Section Header: {match.group(0)}")
 
 if __name__ == "__main__":
-    extract_failures("eval_final.log", "failure_details.txt")
+    import sys
+    input_log = sys.argv[1] if len(sys.argv) > 1 else "eval_fix_100.log"
+    output_file = sys.argv[2] if len(sys.argv) > 2 else "failure_details_fix.txt"
+    extract_failures(input_log, output_file)
