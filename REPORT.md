@@ -10,7 +10,7 @@
 ### 77.8% End-to-End Accuracy on Conversational Financial Q&A with explicit failure controls
 Financial PDFs are unstructured, inconsistent, and expensive to manually analyse for Q&A tasks. Their formats are a pain point for standard NLP models and other retrieval-based systems, which can lead to mistakes and silent hallucinations that are unacceptable in a highly regulated environment. Our solution is an agentic financial PDF parsing system using a **ReAct (Reasoning + Acting)** framework to answer complex conversational financial queries. This has higher accuracy than baseline solutions and considerably lower manual effort. 
 
-The system was evaluated on the ConvFinQA benchmark, achieving up to **77.8% execution accuracy**, outperforming the FinQANet RoBERTa-large baseline by approximately **8–9 percentage points**.
+The system was evaluated on the ConvFinQA benchmark, achieving up to **77.8% execution accuracy**, outperforming the FinQANet RoBERTa-large baseline by **8.9 percentage points**.
 
 Crucially, we include an explicitly tracked **Rejection Rate**, so the agent can abstain from answering when reliable computation is not possible due to ambiguity, tool failures, errors or complexity. In financial settings, an explicit "I don't know" is safer than a confident error.
 
@@ -97,9 +97,9 @@ The prototype has been evaluated against the ConvFinQA benchmark, which is using
 
 | Metric | Result | Target (FinQANet) | Delta | Implications |
 |--------|--------|-------------------|-------|--------------|
-| **Execution Accuracy** | **77.8%** | 68.9% | **+7.5%** | Significantly outperforms the specialised neural baseline. |
+| **Execution Accuracy** | **77.8%** | 68.9% | **+8.9 pp** | Significantly outperforms the specialised neural baseline. |
 
-We are above the target of a 70% accuracy by 7.8%
+We are above the target of a 70% accuracy by 7.8 percentage points.
 We include a second metric here of Rejection Rate. When it comes to financial calculations, "I don't know" is better than a guess. We prioritise Rejection Rate to measure safety/hallucination. 
 
 ConvFinQA train dataset subsets of 20-200 were used for development, and recorded results are based on a ConvFinQA dev dataset subset of 100. It has been run on full 421 records in dev, and accuracy remained similar despite numerous rate-limiting errors. This shows performance remains stable as sample size increases, indicating robustness.
