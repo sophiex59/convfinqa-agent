@@ -366,7 +366,7 @@ def trace(
     question: int = typer.Option(1, "-q", help="Question number (1-indexed)"),
 ) -> None:
     """Trace tool calls step-by-step for one question."""
-    from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     from src.agents.react_agent import (

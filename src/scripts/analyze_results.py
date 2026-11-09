@@ -1,8 +1,9 @@
 
 import json
 import sys
+from collections import Counter
 from pathlib import Path
-from collections import defaultdict, Counter
+
 
 def analyze_results(json_path: str):
     """Analyze evaluation results JSON for failure patterns."""
@@ -21,32 +22,29 @@ def analyze_results(json_path: str):
     correct = sum(1 for r in results if r["matched"])
     rejected = sum(1 for r in results if r["is_rejected"])
     errors = [r for r in results if not r["matched"]]
-    
-    # Categorization buckets
-    cats = Counter()
-    
+
     # Error buckets
     error_types = Counter()
-    
+
     for i, r in enumerate(results):
         if r["matched"]:
             continue
-            
+
         pred = str(r["pred"]).strip()
         gold = str(r["gold"]).strip()
-        
+
         # Heuristics
-        
+
         # 1. Empty/Safety
         if not pred or "n/a" in pred.lower() or "limit" in pred.lower():
             error_types["Safety/Refusal (Empty/N/A)"] += 1
             continue
-            
+
         try:
             # Normalize for math checks
             p_val = float(pred.replace("$","").replace(",","").replace("%",""))
             g_val = float(gold.replace("$","").replace(",","").replace("%",""))
-            
+
             # 2. Unit Scaling (x1000, x1000000)
             if g_val != 0:
                 ratio = p_val / g_val
@@ -62,15 +60,14 @@ def analyze_results(json_path: str):
             if abs(p_val + g_val) < 0.001 and abs(p_val) > 0.001:
                 error_types["Sign Error"] += 1
                 continue
-                
+
             # 4. Percentage Format
             if abs(p_val * 100 - g_val) < 0.1 or abs(p_val - g_val * 100) < 0.1:
                 error_types["Percentage Format"] += 1
                 continue
-            
+
             # 5. Propagation Check (Is this Q2+ and did Q[n-1] fail?)
             # We look at previous result in the list if it belongs to same record
-            prev_failed = False
             if i > 0 and results[i-1]["record_id"] == r["record_id"] and not results[i-1]["matched"]:
                 # Simple heuristic: if previous failed, this might be propagation
                 error_types["Likely Propagation Error"] += 1
@@ -91,7 +88,7 @@ def analyze_results(json_path: str):
                 continue
 
             error_types["Value Mismatch (Other)"] += 1
-            
+
         except ValueError:
             error_types["Non-Numeric Mismatch"] += 1
 
@@ -103,7 +100,7 @@ def analyze_results(json_path: str):
     print("\n═══ FAILURE PATTERNS ═══")
     for etype, count in error_types.most_common():
         print(f"{etype}: {count} ({count/len(errors):.1%} of errors)")
-        
+
     # Optional: Print samples of "Value Mismatch" if verbose
     # (Simplified for now)
 
