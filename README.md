@@ -1,6 +1,12 @@
 # ConvFinQA Agent: Financial Reasoning System
 
-**A ReAct-based autonomous agent designed for numerical reasoning over complex financial documents.**
+An agent that answers conversational financial questions by looking up table values and calculating results with deterministic tools.
+
+**77.8% execution accuracy on a 100-conversation ConvFinQA dev subset, +8.9 pp over FinQANet (RoBERTa-large).**
+
+![Example ConvFinQA agent conversation](figures/chat_example.png)
+
+[Evaluation report](REPORT.md) · [![CI](https://github.com/sophiex59/convfinqa-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/sophiex59/convfinqa-agent/actions/workflows/ci.yml)
 
 ---
 
